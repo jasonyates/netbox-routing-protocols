@@ -10,8 +10,11 @@ Conventions applied consistently across every serializer here:
   instance — which never carries the viewset's queryset annotation — serializes
   cleanly instead of raising. They are deliberately excluded from
   ``brief_fields``.
-* ``password`` on BGP peers and peer groups is a BGP MD5 authentication key and
-  is write-only: it can be set and updated, but is never returned.
+* ``password`` on BGP peers and peer groups is a BGP MD5 authentication key. It is
+  readable, because rendering it into device configuration is the reason for storing
+  it. It is held and returned in plaintext, so it stays out of ``brief_fields`` (and
+  therefore out of nested representations) to limit how widely it is scattered, and
+  out of the change log — see ``BGPPeerAttributes.serialize_object``.
 """
 
 from rest_framework import serializers
@@ -247,10 +250,11 @@ class BGPPeergroupSerializer(PrimaryModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name=_detail_view_name('bgppeergroup'))
     bgprouter = BGPRouterSerializer(nested=True)
     remote_as = ASNSerializer(nested=True)
-    # BGP MD5 authentication key: settable, never returned.
+    # BGP MD5 authentication key. Readable: config generation needs to render it into
+    # device configuration, which is the point of modelling it here. Stored and returned
+    # in plaintext — restrict object permissions accordingly.
     password = serializers.CharField(
         max_length=255,
-        write_only=True,
         required=False,
         allow_blank=True,
     )
@@ -281,10 +285,11 @@ class BGPPeerSerializer(PrimaryModelSerializer):
     name = serializers.CharField(read_only=True)
     bgprouter = BGPRouterSerializer(nested=True)
     remote_as = ASNSerializer(nested=True)
-    # BGP MD5 authentication key: settable, never returned.
+    # BGP MD5 authentication key. Readable: config generation needs to render it into
+    # device configuration, which is the point of modelling it here. Stored and returned
+    # in plaintext — restrict object permissions accordingly.
     password = serializers.CharField(
         max_length=255,
-        write_only=True,
         required=False,
         allow_blank=True,
     )

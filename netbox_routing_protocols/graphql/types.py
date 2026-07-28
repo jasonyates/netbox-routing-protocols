@@ -190,9 +190,9 @@ class BGPPeerAttributesMixin:
 
 @strawberry_django.type(
     models.BGPPeergroup,
-    # `password` holds the BGP MD5 authentication key. The REST API exposes it
-    # write-only; GraphQL has no equivalent, so it is omitted entirely.
-    exclude=['password'],
+    # `password` (the BGP MD5 key) is included: automation reads it from here to render
+    # device configuration. It is returned in plaintext, as it is over REST.
+    fields='__all__',
     filters=BGPPeergroupFilter,
     pagination=True,
 )
@@ -205,7 +205,7 @@ class BGPPeergroupType(BGPPeerAttributesMixin, OwnerMixin, NetBoxObjectType):
 
 @strawberry_django.type(
     models.BGPPeer,
-    exclude=['password'],
+    fields='__all__',
     filters=BGPPeerFilter,
     pagination=True,
 )

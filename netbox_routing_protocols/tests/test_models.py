@@ -1255,13 +1255,15 @@ class BGPPrefixRemovalSignalTestCase(BaseTestData, TestCase):
 
 class BGPPasswordChangeLogTestCase(BaseTestData, TestCase):
     """
-    The BGP MD5 key must not reach ObjectChange.
+    The BGP MD5 key is change-logged like any other field.
 
-    ``serialize_object()`` walks every concrete field, so a write-only REST serializer
-    and a GraphQL exclusion do nothing for this path: without the override on
-    ``BGPPeerAttributes`` the plaintext key lands in ``prechange_data`` and
-    ``postchange_data`` on every create and update, readable by anyone holding
-    ``core.view_objectchange``.
+    It is deliberately not stripped: the key is readable over REST, GraphQL and the UI
+    because config generation needs it, so hiding it from the change log alone would be
+    inconsistent without being safer. These tests pin that decision down, so a future
+    change back to stripping is a visible, deliberate act rather than a silent one.
+
+    The mitigation is documented in the README: store the platform's hashed or encrypted
+    form rather than the raw secret.
     """
 
     SECRET = 'SUPERSECRET-MD5'
@@ -1289,45 +1291,24 @@ class BGPPasswordChangeLogTestCase(BaseTestData, TestCase):
     def subjects(self):
         return (('BGPPeer', self.peer), ('BGPPeergroup', self.peergroup))
 
-    def assertNoSecret(self, data, label):
-        self.assertIsNotNone(data, f'{label}: expected serialized data')
-        self.assertNotIn('password', data, f'{label}: password key present')
-        self.assertNotIn(self.SECRET, str(data), f'{label}: password value present')
-        self.assertNotIn(self.ROTATED, str(data), f'{label}: rotated password value present')
-
-    def test_serialize_object_omits_the_password(self):
+    def test_serialize_object_includes_the_password(self):
         for label, instance in self.subjects():
             with self.subTest(model=label):
-                self.assertNoSecret(instance.serialize_object(), f'{label}.serialize_object()')
+                data = instance.serialize_object()
+                self.assertIn('password', data)
+                self.assertEqual(data['password'], self.SECRET)
 
-    def test_serialize_object_honours_a_caller_supplied_exclude(self):
-        """The override must add to the caller's exclusions, not replace them."""
-        for label, instance in self.subjects():
-            with self.subTest(model=label):
-                data = instance.serialize_object(exclude=['description'])
-                self.assertNotIn('password', data)
-                self.assertNotIn('description', data)
-                self.assertIn('enable', data)
-
-    def test_create_objectchange_omits_the_password(self):
-        for label, instance in self.subjects():
-            with self.subTest(model=label):
-                change = instance.to_objectchange(ObjectChangeActionChoices.ACTION_CREATE)
-                self.assertNoSecret(change.postchange_data, f'{label} create postchange_data')
-
-    def test_update_objectchange_omits_the_password_from_both_snapshots(self):
+    def test_update_objectchange_records_both_snapshots(self):
         for label, instance in self.subjects():
             with self.subTest(model=label):
                 instance.snapshot()
                 instance.password = self.ROTATED
-                instance.description = 'rotated'
                 change = instance.to_objectchange(ObjectChangeActionChoices.ACTION_UPDATE)
 
-                self.assertNoSecret(change.prechange_data, f'{label} update prechange_data')
-                self.assertNoSecret(change.postchange_data, f'{label} update postchange_data')
+                self.assertEqual(change.prechange_data['password'], self.SECRET)
+                self.assertEqual(change.postchange_data['password'], self.ROTATED)
 
     def test_ordinary_change_logging_still_works(self):
-        """Excluding one field must not blunt the change log for everything else."""
         for label, instance in self.subjects():
             with self.subTest(model=label):
                 instance.snapshot()
@@ -1338,15 +1319,13 @@ class BGPPasswordChangeLogTestCase(BaseTestData, TestCase):
                 self.assertEqual(change.prechange_data['description'], '')
                 self.assertEqual(change.postchange_data['description'], f'{label} updated')
                 self.assertNotEqual(change.prechange_data['bfd'], change.postchange_data['bfd'])
-                # Fields the plugin does not touch are still recorded in full.
                 self.assertEqual(change.postchange_data['remote_as'], self.asns[0].pk)
 
-    def test_diff_reports_the_other_fields_and_never_the_password(self):
+    def test_diff_reports_a_rotated_password(self):
         for label, instance in self.subjects():
             with self.subTest(model=label):
                 instance.snapshot()
                 instance.password = self.ROTATED
-                instance.description = 'diffed'
                 change = instance.to_objectchange(ObjectChangeActionChoices.ACTION_UPDATE)
                 change.user = self.user
                 # request_id is non-null and is normally stamped by the change-logging
@@ -1354,46 +1333,9 @@ class BGPPasswordChangeLogTestCase(BaseTestData, TestCase):
                 change.request_id = uuid.uuid4()
                 change.save()
 
-                # Read the row back rather than diffing the in-memory instance, so the
-                # assertion covers what is actually stored and served.
                 diff = ObjectChange.objects.get(pk=change.pk).diff()
-                self.assertEqual(diff['post']['description'], 'diffed')
-                self.assertNotIn('password', diff['pre'])
-                self.assertNotIn('password', diff['post'])
-                self.assertNotIn(self.ROTATED, str(diff))
-
-    def test_a_saved_objectchange_row_holds_no_password(self):
-        """End to end through the signal handlers, not just the model method."""
-        request = build_request(self.user)
-        with event_tracking(request):
-            peergroup = BGPPeergroup.objects.create(
-                bgprouter=self.router,
-                name='PG-VIA-SIGNAL',
-                remote_as=self.asns[0],
-                password=self.SECRET,
-            )
-            peer = BGPPeer.objects.create(
-                bgprouter=self.router,
-                remote_address=self.addresses4[1],
-                remote_as=self.asns[0],
-                password=self.SECRET,
-            )
-
-        for label, instance in (('BGPPeergroup', peergroup), ('BGPPeer', peer)):
-            with self.subTest(model=label):
-                change = ObjectChange.objects.get(
-                    changed_object_type=ContentType.objects.get_for_model(instance),
-                    changed_object_id=instance.pk,
-                )
-                self.assertEqual(change.action, ObjectChangeActionChoices.ACTION_CREATE)
-                self.assertNoSecret(change.postchange_data, f'{label} saved ObjectChange')
-                # The row is a real, useful change record — just without the key.
-                self.assertEqual(change.postchange_data['bgprouter'], self.router.pk)
-
-        # And the key really is in the database, so the assertions above are not passing
-        # because nothing was stored in the first place.
-        peer.refresh_from_db()
-        self.assertEqual(peer.password, self.SECRET)
+                self.assertEqual(diff['pre']['password'], self.SECRET)
+                self.assertEqual(diff['post']['password'], self.ROTATED)
 
 
 class ConstraintNamingTestCase(TestCase):

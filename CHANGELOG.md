@@ -41,10 +41,13 @@ there is no in-place upgrade path from pre-release internal builds.
   instead of names
 - Static routes with no next hop raised an error when rendered
 - A duplicate filter definition on BGP routers silently shadowed the ASN filter
-- BGP MD5 passwords were readable through the REST API, the GraphQL API, the change log
-  (and therefore webhook payloads), and the edit form's HTML source. They are now write-only
-  over REST, excluded from the GraphQL types, stripped from change log snapshots, and never
-  rendered back into a form. Leave the field blank to keep the current key, or tick Clear
-  Password to remove one
+
+### Security
+- BGP MD5 authentication keys (`BGPPeer.password`, `BGPPeergroup.password`) are stored and
+  returned **in clear** by the REST API, the GraphQL API, the change log and the UI. This is
+  deliberate: config generation has to be able to read the key back, so a value automation
+  cannot retrieve would defeat the point of recording it. Store your platform's hashed or
+  encrypted representation rather than the raw secret, and restrict object permissions
+  accordingly — see the README
 
 [1.0.0]: https://github.com/jasonyates/netbox-routing-protocols/releases/tag/v1.0.0

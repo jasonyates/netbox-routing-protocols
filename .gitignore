@@ -18,3 +18,7 @@ htmlcov/
 .DS_Store
 .idea/
 .vscode/
+
+# Local design and planning notes — kept out of the published repo
+docs/plans/
+docs/verify_cascade.py

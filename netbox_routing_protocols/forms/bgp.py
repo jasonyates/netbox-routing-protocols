@@ -125,58 +125,19 @@ class BGPRouterCSVMixin(forms.Form):
 
 class BGPPasswordMixin(forms.Form):
     """
-    Edits the BGP MD5 key without ever writing it back into the page.
+    The BGP MD5 key, edited as an ordinary text field.
 
-    ``PasswordInput(render_value=True)`` puts the stored key into the edit form's
-    HTML as a ``value=`` attribute, so anyone who can open the edit page — or
-    anything that caches, logs or screenshots it — can read the key straight out
-    of the source. The widget here renders empty instead.
-
-    That makes a blank submission ambiguous, so it is resolved in the users'
-    favour: blank means "leave the stored key alone", and removing a key is an
-    explicit tick of ``clear_password`` rather than a side effect of saving an
-    unrelated change. Without that affordance a key could never be removed
-    through the UI at all.
+    It is deliberately visible: the key has to reach device configuration, so
+    hiding it in the UI while returning it over the REST and GraphQL APIs would
+    be inconsistent without being safer. Store the platform's encrypted or hashed
+    representation rather than the raw secret — see the README.
     """
 
     password = forms.CharField(
         label=_('Password'),
         required=False,
-        widget=forms.PasswordInput(),
-        help_text=_('BGP MD5 authentication key. Leave blank to keep the current key.'),
+        help_text=_('BGP MD5 authentication key. Prefer your platform’s hashed form over the raw secret.'),
     )
-    clear_password = forms.BooleanField(
-        label=_('Clear Password'),
-        required=False,
-        help_text=_('Remove the stored authentication key from this session.'),
-    )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # Nothing to clear on a new object, and offering the tick there would only
-        # invite the "set a key and clear it in the same submission" error below.
-        if not self.instance.pk:
-            del self.fields['clear_password']
-
-    def clean(self):
-        super().clean()
-        # NetBox's CheckLastUpdatedMixin.clean() returns None on several paths, so the
-        # return value of super() cannot be relied on; read the canonical dict instead.
-        cleaned_data = self.cleaned_data
-
-        if cleaned_data.get('clear_password'):
-            if cleaned_data.get('password'):
-                raise forms.ValidationError(
-                    {
-                        'password': _('Cannot set a new password and clear the existing one in the same change.'),
-                    }
-                )
-            cleaned_data['password'] = ''
-        elif not cleaned_data.get('password'):
-            cleaned_data['password'] = self.instance.password
-
-        return cleaned_data
 
 
 #
@@ -406,7 +367,7 @@ class BGPPeergroupForm(BGPPasswordMixin, NetBoxModelForm):
 
     fieldsets = (
         FieldSet('bgprouter', 'name', 'enable', name=_('Peer Group')),
-        FieldSet('remote_as', 'bfd', 'password', 'clear_password', name=_('Session')),
+        FieldSet('remote_as', 'bfd', 'password', name=_('Session')),
         FieldSet('ebgp_multihop', 'ebgp_multihop_ttl', name=_('eBGP Multihop')),
         FieldSet('description', 'tags', name=_('Attributes')),
     )
@@ -509,7 +470,6 @@ class BGPPeergroupBulkEditForm(NetBoxModelBulkEditForm):
     password = forms.CharField(
         label=_('Password'),
         required=False,
-        widget=forms.PasswordInput(),
         help_text=_("Leave blank to keep each object's current key."),
     )
     ebgp_multihop = forms.NullBooleanField(
@@ -626,7 +586,7 @@ class BGPPeerForm(BGPPasswordMixin, NetBoxModelForm):
             ),
             name=_('Addressing'),
         ),
-        FieldSet('remote_as', 'bfd', 'password', 'clear_password', name=_('Session')),
+        FieldSet('remote_as', 'bfd', 'password', name=_('Session')),
         FieldSet('ebgp_multihop', 'ebgp_multihop_ttl', name=_('eBGP Multihop')),
         FieldSet('description', 'tags', name=_('Attributes')),
     )
@@ -768,7 +728,6 @@ class BGPPeerBulkEditForm(NetBoxModelBulkEditForm):
     password = forms.CharField(
         label=_('Password'),
         required=False,
-        widget=forms.PasswordInput(),
         help_text=_("Leave blank to keep each object's current key."),
     )
     ebgp_multihop = forms.NullBooleanField(

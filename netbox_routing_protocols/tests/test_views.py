@@ -1029,14 +1029,12 @@ class PrefixNotAChildTestCase(BaseTestData, TestCase):
 
 class BGPPasswordFormTestCase(BaseTestData, TestCase):
     """
-    The BGP MD5 key must never be written back into the edit page.
+    The BGP MD5 key is edited as an ordinary text field.
 
-    ``PasswordInput(render_value=True)`` puts the stored key into the HTML as a
-    ``value=`` attribute, so anyone with change permission — which is a far broader
-    group than "people who should know the key" — can read it from the page source.
-    Not rendering it makes a blank submission ambiguous, so the other half of the
-    behaviour matters just as much: blank must preserve, and there has to be some way
-    to deliberately remove a key.
+    It is deliberately visible and round-trips like any other value: the key has to reach
+    device configuration, and it is already readable over REST and GraphQL, so hiding it
+    in the UI alone would be inconsistent without being safer. The documented mitigation
+    is to store the platform's hashed form rather than the raw secret.
     """
 
     SECRET = 'SUPERSECRET-MD5'
@@ -1091,13 +1089,10 @@ class BGPPasswordFormTestCase(BaseTestData, TestCase):
 
     def grant(self, label):
         """
-        Change permission on the model, plus view permission on everything its
+        Change and view permission on the model, plus view permission on everything its
         DynamicModelChoiceFields select from — those querysets are restricted to what the
-        user may see, so a related object the user cannot view is not a valid choice.
-
-        That includes the model itself: the bulk edit form's ``pk`` field is restricted the
-        same way, so without view permission the selected objects are not valid choices and
-        the form fails with "Select a valid choice".
+        user may see, so a related object the user cannot view is not a valid choice. That
+        includes the model itself, whose objects populate the bulk edit form's ``pk`` field.
         """
         self.add_permissions(
             f'netbox_routing_protocols.change_{label}',
@@ -1110,7 +1105,8 @@ class BGPPasswordFormTestCase(BaseTestData, TestCase):
             'dcim.view_interface',
         )
 
-    def test_edit_form_html_never_contains_the_stored_key(self):
+    def test_edit_form_renders_the_stored_key(self):
+        """An ordinary field shows its current value, so it can be read and amended."""
         for label, instance, _form_data in self.subjects():
             with self.subTest(model=label):
                 self.grant(label)
@@ -1118,24 +1114,10 @@ class BGPPasswordFormTestCase(BaseTestData, TestCase):
                 self.assertHttpStatus(response, 200)
 
                 content = response.content.decode()
-                self.assertNotIn(self.SECRET, content)
-                # The field is still offered, so the absence above is not simply the
-                # field having been dropped from the form.
                 self.assertIn('name="password"', content)
-                self.assertIn('name="clear_password"', content)
-
-    def test_blank_password_preserves_the_stored_key(self):
-        for label, instance, form_data in self.subjects():
-            with self.subTest(model=label):
-                self.grant(label)
-
-                data = {**form_data, 'password': '', 'description': 'Edited without touching the key'}
-                response = self.client.post(self.edit_url(label, instance), data)
-                self.assertHttpStatus(response, 302)
-
-                instance.refresh_from_db()
-                self.assertEqual(instance.description, 'Edited without touching the key')
-                self.assertEqual(instance.password, self.SECRET)
+                self.assertIn(self.SECRET, content)
+                # The bespoke clear affordance is gone; blanking the field is enough.
+                self.assertNotIn('name="clear_password"', content)
 
     def test_a_new_password_replaces_the_stored_key(self):
         for label, instance, form_data in self.subjects():
@@ -1144,76 +1126,36 @@ class BGPPasswordFormTestCase(BaseTestData, TestCase):
 
                 data = {**form_data, 'password': 'ROTATED-MD5'}
                 response = self.client.post(self.edit_url(label, instance), data)
-                self.assertIn(response.status_code, (200, 302))
+                self.assertHttpStatus(response, 302)
 
                 instance.refresh_from_db()
                 self.assertEqual(instance.password, 'ROTATED-MD5')
 
-    def test_clear_password_removes_the_stored_key(self):
-        """Blank must mean "unchanged", so there has to be an explicit way to remove a key."""
+    def test_submitting_a_blank_password_clears_it(self):
+        """Blank means blank, as it would for any other optional character field."""
         for label, instance, form_data in self.subjects():
             with self.subTest(model=label):
                 self.grant(label)
 
-                data = {**form_data, 'password': '', 'clear_password': 'on'}
+                data = {**form_data, 'password': ''}
                 response = self.client.post(self.edit_url(label, instance), data)
-                self.assertIn(response.status_code, (200, 302))
+                self.assertHttpStatus(response, 302)
 
                 instance.refresh_from_db()
                 self.assertEqual(instance.password, '')
 
-    def test_setting_and_clearing_at_once_is_rejected(self):
-        for label, instance, form_data in self.subjects():
-            with self.subTest(model=label):
-                self.grant(label)
-
-                data = {**form_data, 'password': 'ROTATED-MD5', 'clear_password': 'on'}
-                response = self.client.post(self.edit_url(label, instance), data)
-                self.assertHttpStatus(response, 200)
-
-                instance.refresh_from_db()
-                self.assertEqual(instance.password, self.SECRET)
-
-    def test_the_add_form_offers_no_clear_checkbox(self):
-        """There is nothing to clear on an object that does not exist yet."""
-        for label, _instance, _form_data in self.subjects():
-            with self.subTest(model=label):
-                self.add_permissions(
-                    f'netbox_routing_protocols.add_{label}',
-                    'netbox_routing_protocols.view_bgprouter',
-                    'ipam.view_asn',
-                )
-                response = self.client.get(reverse(f'{URL_NAMESPACE}:{label}_add'))
-                self.assertHttpStatus(response, 200)
-
-                content = response.content.decode()
-                self.assertIn('name="password"', content)
-                self.assertNotIn('name="clear_password"', content)
-
-    def test_bulk_edit_form_html_never_contains_a_stored_key(self):
+    def test_bulk_edit_sets_a_password(self):
         for label, instance, _form_data in self.subjects():
             with self.subTest(model=label):
                 self.grant(label)
                 response = self.client.post(
                     reverse(f'{URL_NAMESPACE}:{label}_bulk_edit'),
-                    {'pk': [instance.pk], '_edit': ''},
-                )
-                self.assertHttpStatus(response, 200)
-                self.assertNotIn(self.SECRET, response.content.decode())
-
-    def test_bulk_edit_leaves_a_blank_password_alone(self):
-        for label, instance, _form_data in self.subjects():
-            with self.subTest(model=label):
-                self.grant(label)
-                response = self.client.post(
-                    reverse(f'{URL_NAMESPACE}:{label}_bulk_edit'),
-                    {'pk': [instance.pk], '_apply': '', 'password': '', 'description': 'Bulk edited'},
+                    {'pk': [instance.pk], '_apply': '', 'password': 'BULK-MD5'},
                 )
                 self.assertIn(response.status_code, (200, 302))
 
                 instance.refresh_from_db()
-                self.assertEqual(instance.description, 'Bulk edited')
-                self.assertEqual(instance.password, self.SECRET)
+                self.assertEqual(instance.password, 'BULK-MD5')
 
     def test_bulk_edit_can_clear_a_password_through_set_null(self):
         for label, instance, _form_data in self.subjects():

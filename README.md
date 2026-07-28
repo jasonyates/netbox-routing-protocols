@@ -95,23 +95,42 @@ curl -H "Authorization: Token $NETBOX_TOKEN" \
      https://netbox.example.com/api/plugins/routing-protocols/bgp-peers/?device=core-sw-01
 ```
 
-### A note on BGP passwords
+### ⚠️ BGP passwords are stored and returned in clear
 
-`BGPPeer.password` and `BGPPeergroup.password` hold BGP MD5 authentication keys. The plugin
-keeps them out of every read path it controls:
+`BGPPeer.password` and `BGPPeergroup.password` hold the BGP MD5 authentication key. The field
+is treated like any other: it is **stored as entered and returned verbatim** by the REST API,
+the GraphQL API, the change log (and therefore webhook payloads), and the UI.
 
-- **REST API** — the field is write-only. It can be set and updated, but is not serialised into
-  any response, including nested and `?brief=true` representations.
-- **GraphQL** — the field is excluded from both object types.
-- **Change log** — the field is stripped from `prechange_data` and `postchange_data`, so it is
-  not readable through the changelog tab, `/api/core/object-changes/`, GraphQL `changelog`, or
-  webhook payloads.
-- **UI** — the edit form never renders the stored key back into the page. Leave the field blank
-  to keep the current key; tick **Clear Password** to remove one.
+That is deliberate. The key has to reach device configuration, so config generation must be
+able to read it back — a value automation cannot retrieve would defeat the point of recording
+it here.
 
-The key is still stored in plaintext in the database, and is still readable by anything with
-direct database or Django shell access. Treat the database as holding secrets, back it up
-accordingly, and restrict object permissions to match.
+It does mean the value is readable by anyone who can view the object, and by anything holding
+`core.view_objectchange`, plus anyone with database or Django shell access.
+
+**Store your platform's hashed or encrypted form, not the raw secret.** Most network operating
+systems accept a pre-encrypted key and will render it straight into the configuration:
+
+```
+! Cisco IOS — type 7
+neighbor 192.0.2.1 password 7 070C285F4D06
+! Arista EOS — type 7
+neighbor 192.0.2.1 password 7 <encrypted>
+! Juniper — $9$ encrypted
+set protocols bgp group EXTERNAL neighbor 192.0.2.1 authentication-key "$9$..."
+```
+
+Storing that form means NetBox never holds the raw secret, and the value can still be rendered
+into config unchanged.
+
+Be aware of what this does and does not buy you. Cisco/Arista type 7 is obfuscation, not
+encryption — it is trivially reversible, so it protects against casual exposure (a screenshot,
+a shared export, an over-broad API token) rather than against an attacker who obtains the
+value. Juniper `$9$` is likewise reversible. If your platform supports a genuinely
+non-reversible form, prefer it.
+
+Regardless of which form you store, restrict object permissions to match the sensitivity, and
+treat database backups and webhook destinations as carrying secrets.
 
 ## Contributing
 

@@ -150,13 +150,14 @@ class BGPPeerAttributes(PrimaryModel):
         help_text='Use Bidirectional Forwarding Detection for this session.',
     )
 
-    # Sensitive: write-only over the REST API, excluded from the GraphQL type, and
-    # stripped from every change log snapshot by serialize_object() below.
+    # Held and returned in plaintext, like any other field: the key has to reach device
+    # configuration, so automation must be able to read it back. Store your platform's
+    # hashed or encrypted representation rather than the raw secret — see the README.
     password = models.CharField(
         max_length=255,
         blank=True,
         default='',
-        help_text='BGP MD5 authentication key.',
+        help_text='BGP MD5 authentication key. Prefer a hashed form over the raw secret.',
     )
 
     ebgp_multihop = models.BooleanField(
@@ -182,25 +183,6 @@ class BGPPeerAttributes(PrimaryModel):
     @property
     def vrf(self):
         return self.bgprouter.vrf
-
-    def serialize_object(self, exclude=None):
-        """
-        Serialize for the change log with the MD5 key removed.
-
-        NetBox serializes every concrete field of a model into
-        ``ObjectChange.prechange_data``/``postchange_data`` (and into webhook
-        payloads, via ``extras.events``). Write-only REST serializers and a
-        GraphQL exclusion do nothing about that path, so without this override
-        the plaintext key would be readable by anyone holding
-        ``core.view_objectchange`` — through the changelog tab, the
-        ``/api/core/object-changes/`` endpoint and the GraphQL ``changelog``
-        field alike.
-
-        Excluding the field entirely, rather than masking it, keeps the key out
-        of the diff as well: a masked value would still reveal *when* the key
-        changed, and a constant mask would produce misleading "no change" diffs.
-        """
-        return super().serialize_object(exclude={*(exclude or ()), 'password'})
 
     def clean(self):
         super().clean()

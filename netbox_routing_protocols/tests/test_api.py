@@ -879,8 +879,11 @@ class NestedSerializationTestCase(RoutingProtocolsAPIFixture):
 
 class PasswordDisclosureTestCase(RoutingProtocolsAPIFixture):
     """
-    The BGP MD5 authentication key must be settable over the API and never
-    returned, in any representation.
+    The BGP MD5 authentication key is deliberately readable: rendering it into device
+    configuration is the reason for modelling it, and automation reads it from here.
+
+    It is still kept out of the representations that would scatter it further than that
+    need requires — ``brief_fields``, and therefore every nested representation.
     """
 
     def assertNoPassword(self, payload):
@@ -888,24 +891,29 @@ class PasswordDisclosureTestCase(RoutingProtocolsAPIFixture):
         self.assertNotIn('peer-secret', str(payload))
         self.assertNotIn('peergroup-secret', str(payload))
 
-    def test_password_absent_from_detail_responses(self):
+    def test_password_is_returned_in_detail_responses(self):
+        """Automation reads the key from here; if this breaks, config generation breaks."""
         self.grant_view_permissions()
 
-        for label, instance in (('bgppeer', self.peer), ('bgppeergroup', self.peergroup)):
+        for label, instance, secret in (
+            ('bgppeer', self.peer, 'peer-secret'),
+            ('bgppeergroup', self.peergroup, 'peergroup-secret'),
+        ):
             with self.subTest(endpoint=label):
                 response = self.client.get(self.detail_url(label, instance), **self.header)
                 self.assertHttpStatus(response, status.HTTP_200_OK)
-                self.assertNoPassword(response.data)
+                self.assertIn('password', response.data)
+                self.assertEqual(response.data['password'], secret)
 
-    def test_password_absent_from_list_responses(self):
+    def test_password_is_returned_in_list_responses(self):
         self.grant_view_permissions()
 
-        for label in ('bgppeer', 'bgppeergroup'):
+        for label, secret in (('bgppeer', 'peer-secret'), ('bgppeergroup', 'peergroup-secret')):
             with self.subTest(endpoint=label):
                 response = self.client.get(self.list_url(label), **self.header)
                 self.assertHttpStatus(response, status.HTTP_200_OK)
-                for result in response.data['results']:
-                    self.assertNoPassword(result)
+                passwords = [r['password'] for r in response.data['results']]
+                self.assertIn(secret, passwords)
 
     def test_password_absent_from_brief_responses(self):
         self.grant_view_permissions()
@@ -955,7 +963,7 @@ class PasswordDisclosureTestCase(RoutingProtocolsAPIFixture):
             **self.header,
         )
         self.assertHttpStatus(response, status.HTTP_201_CREATED)
-        self.assertNotIn('password', response.data)
+        self.assertEqual(response.data['password'], 'created-secret')
         self.assertEqual(BGPPeergroup.objects.get(pk=response.data['id']).password, 'created-secret')
 
         response = self.client.post(
@@ -970,7 +978,7 @@ class PasswordDisclosureTestCase(RoutingProtocolsAPIFixture):
             **self.header,
         )
         self.assertHttpStatus(response, status.HTTP_201_CREATED)
-        self.assertNotIn('password', response.data)
+        self.assertEqual(response.data['password'], 'created-secret')
         self.assertEqual(BGPPeer.objects.get(pk=response.data['id']).password, 'created-secret')
 
     def test_password_is_settable_on_update(self):
@@ -986,7 +994,7 @@ class PasswordDisclosureTestCase(RoutingProtocolsAPIFixture):
             **self.header,
         )
         self.assertHttpStatus(response, status.HTTP_200_OK)
-        self.assertNotIn('password', response.data)
+        self.assertEqual(response.data['password'], 'rotated-secret')
         self.peer.refresh_from_db()
         self.assertEqual(self.peer.password, 'rotated-secret')
 
@@ -997,7 +1005,7 @@ class PasswordDisclosureTestCase(RoutingProtocolsAPIFixture):
             **self.header,
         )
         self.assertHttpStatus(response, status.HTTP_200_OK)
-        self.assertNotIn('password', response.data)
+        self.assertEqual(response.data['password'], 'rotated-secret')
         self.peergroup.refresh_from_db()
         self.assertEqual(self.peergroup.password, 'rotated-secret')
 
