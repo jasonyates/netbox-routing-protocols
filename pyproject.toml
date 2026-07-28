@@ -1,0 +1,98 @@
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netbox-routing-protocols"
+description = "Model static routes, routing policy and BGP configuration in NetBox"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Jason Yates", email = "me@jasonyates.co.uk" }]
+keywords = ["netbox", "netbox-plugin", "bgp", "routing", "ipam", "networking"]
+dynamic = ["version"]
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Framework :: Django",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Telecommunications Industry",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking",
+]
+
+# NetBox itself is not declared as a dependency: the plugin is installed into an
+# existing NetBox virtualenv, and pinning it here would fight that installation.
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+    "ruff>=0.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/jasonyates/netbox-routing-protocols"
+Source = "https://github.com/jasonyates/netbox-routing-protocols"
+Issues = "https://github.com/jasonyates/netbox-routing-protocols/issues"
+Changelog = "https://github.com/jasonyates/netbox-routing-protocols/blob/main/CHANGELOG.md"
+
+[project.entry-points."netbox.plugins"]
+netbox_routing_protocols = "netbox_routing_protocols:config"
+
+[tool.setuptools.dynamic]
+version = { attr = "netbox_routing_protocols.version.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["netbox_routing_protocols*"]
+
+[tool.setuptools.package-data]
+netbox_routing_protocols = ["templates/**/*", "static/**/*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+# docs/ holds verbatim quotes of pre-existing code as audit evidence; leave it alone.
+extend-exclude = ["migrations", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "DJ"]
+ignore = [
+    # NetBox models are conventionally declared without explicit __str__ ordering
+    "DJ008",
+]
+
+[tool.ruff.format]
+# NetBox uses single quotes throughout; match it.
+quote-style = "single"
+
+[tool.ruff.lint.isort]
+known-first-party = ["netbox_routing_protocols"]
+# Give NetBox's core apps their own import block, between third-party and this plugin.
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "netbox",
+    "first-party",
+    "local-folder",
+]
+
+[tool.ruff.lint.isort.sections]
+netbox = [
+    "circuits",
+    "core",
+    "dcim",
+    "extras",
+    "ipam",
+    "netbox",
+    "tenancy",
+    "users",
+    "utilities",
+    "virtualization",
+    "vpn",
+    "wireless",
+]

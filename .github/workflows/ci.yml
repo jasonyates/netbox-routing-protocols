@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install ruff
+      - run: ruff check .
+      - run: ruff format --check .
+
+  test:
+    name: NetBox ${{ matrix.netbox }} / Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest and newest supported NetBox 4.6 patch releases.
+        netbox: ["v4.6.0", "v4.6.5"]
+        python: ["3.12"]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: netbox
+          POSTGRES_PASSWORD: netbox
+          POSTGRES_DB: netbox
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out the plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - name: Check out NetBox ${{ matrix.netbox }}
+        uses: actions/checkout@v4
+        with:
+          repository: netbox-community/netbox
+          ref: ${{ matrix.netbox }}
+          path: netbox
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r netbox/requirements.txt
+          pip install -e ./plugin
+
+      - name: Configure NetBox
+        # Reuse NetBox's own testing configuration (its DB/Redis credentials already
+        # match the service containers above) and just swap in our plugin.
+        working-directory: netbox/netbox/netbox
+        run: |
+          cp configuration_testing.py configuration.py
+          echo "PLUGINS = ['netbox_routing_protocols']" >> configuration.py
+
+      - name: Run migrations
+        working-directory: netbox/netbox
+        run: python manage.py migrate --no-input
+
+      - name: Run tests
+        working-directory: netbox/netbox
+        run: python manage.py test netbox_routing_protocols --no-input -v 2
