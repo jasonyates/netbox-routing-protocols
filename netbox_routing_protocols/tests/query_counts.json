@@ -1,0 +1,14 @@
+{
+  "bgpaddressfamily:api_list_objects": 15,
+  "bgpaddressfamilyredistribute:api_list_objects": 13,
+  "bgppeer:api_list_objects": 14,
+  "bgppeeraddressfamily:api_list_objects": 13,
+  "bgppeergroup:api_list_objects": 13,
+  "bgppeergroupaddressfamily:api_list_objects": 13,
+  "bgprouter:api_list_objects": 13,
+  "prefixlist:api_list_objects": 13,
+  "prefixlistrule:api_list_objects": 13,
+  "routemap:api_list_objects": 13,
+  "routemaprule:api_list_objects": 13,
+  "staticroute:api_list_objects": 13
+}
