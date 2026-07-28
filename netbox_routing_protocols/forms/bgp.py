@@ -7,9 +7,9 @@ from dcim.models import Device, Interface
 from ipam.models import ASN, VRF, IPAddress, Prefix
 from netbox.forms import (
     NetBoxModelBulkEditForm,
-    NetBoxModelFilterSetForm,
     NetBoxModelForm,
     NetBoxModelImportForm,
+    PrimaryModelFilterSetForm,
 )
 from utilities.forms import BOOLEAN_WITH_BLANK_CHOICES
 from utilities.forms.fields import (
@@ -178,7 +178,7 @@ class BGPRouterForm(NetBoxModelForm):
         )
 
 
-class BGPRouterFilterForm(NetBoxModelFilterSetForm):
+class BGPRouterFilterForm(PrimaryModelFilterSetForm):
     model = BGPRouter
 
     device_id = DynamicModelMultipleChoiceField(
@@ -228,6 +228,7 @@ class BGPRouterFilterForm(NetBoxModelFilterSetForm):
         FieldSet('device_id', 'vrf_id', 'enable', name=_('BGP Router')),
         FieldSet('asn_id', 'router_id_id', name=_('Identity')),
         FieldSet('aspath_ignore', 'route_reflection', 'enable_evpn', name=_('Behaviour')),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 
@@ -377,7 +378,7 @@ class BGPPeergroupForm(NetBoxModelForm):
         )
 
 
-class BGPPeergroupFilterForm(NetBoxModelFilterSetForm):
+class BGPPeergroupFilterForm(PrimaryModelFilterSetForm):
     model = BGPPeergroup
 
     bgprouter_id = DynamicModelMultipleChoiceField(
@@ -425,6 +426,7 @@ class BGPPeergroupFilterForm(NetBoxModelFilterSetForm):
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('device_id', 'vrf_id', 'bgprouter_id', name=_('BGP Router')),
         FieldSet('remote_as_id', 'enable', 'bfd', 'ebgp_multihop', name=_('Session')),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 
@@ -607,7 +609,7 @@ class BGPPeerForm(NetBoxModelForm):
             self.fields['device'].initial = self.instance.bgprouter.device_id
 
 
-class BGPPeerFilterForm(NetBoxModelFilterSetForm):
+class BGPPeerFilterForm(PrimaryModelFilterSetForm):
     model = BGPPeer
 
     bgprouter_id = DynamicModelMultipleChoiceField(
@@ -677,6 +679,7 @@ class BGPPeerFilterForm(NetBoxModelFilterSetForm):
         FieldSet('device_id', 'vrf_id', 'bgprouter_id', name=_('BGP Router')),
         FieldSet('peergroup_id', 'remote_address_id', 'interface_id', name=_('Peer')),
         FieldSet('remote_as_id', 'enable', 'bfd', 'ebgp_multihop', name=_('Session')),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 
@@ -892,7 +895,7 @@ class BGPAddressFamilyForm(NetBoxModelForm):
             self.fields['device'].initial = self.instance.bgprouter.device_id
 
 
-class BGPAddressFamilyFilterForm(NetBoxModelFilterSetForm):
+class BGPAddressFamilyFilterForm(PrimaryModelFilterSetForm):
     model = BGPAddressFamily
 
     bgprouter_id = DynamicModelMultipleChoiceField(
@@ -929,6 +932,16 @@ class BGPAddressFamilyFilterForm(NetBoxModelFilterSetForm):
         queryset=RouteMap.objects.all(),
         required=False,
     )
+    aggregate_route_id = DynamicModelMultipleChoiceField(
+        label=_('Aggregate Route'),
+        queryset=Prefix.objects.all(),
+        required=False,
+    )
+    network_id = DynamicModelMultipleChoiceField(
+        label=_('Network'),
+        queryset=Prefix.objects.all(),
+        required=False,
+    )
     enable = forms.NullBooleanField(
         label=_('Enabled'),
         required=False,
@@ -945,7 +958,9 @@ class BGPAddressFamilyFilterForm(NetBoxModelFilterSetForm):
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('device_id', 'vrf_id', 'bgprouter_id', name=_('BGP Router')),
         FieldSet('family', 'enable', 'export_to_evpn', name=_('Address Family')),
+        FieldSet('aggregate_route_id', 'network_id', name=_('Origination')),
         FieldSet('aggregate_route_map_id', 'network_route_map_id', name=_('Policy')),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 
@@ -1106,7 +1121,7 @@ class BGPAddressFamilyRedistributeForm(NetBoxModelForm):
             self.fields['device'].initial = self.instance.family.bgprouter.device_id
 
 
-class BGPAddressFamilyRedistributeFilterForm(NetBoxModelFilterSetForm):
+class BGPAddressFamilyRedistributeFilterForm(PrimaryModelFilterSetForm):
     model = BGPAddressFamilyRedistribute
 
     family_id = DynamicModelMultipleChoiceField(
@@ -1148,6 +1163,7 @@ class BGPAddressFamilyRedistributeFilterForm(NetBoxModelFilterSetForm):
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('device_id', 'bgprouter_id', 'family_id', name=_('Address Family')),
         FieldSet('protocol', 'enable', 'route_map_id', name=_('Redistribution')),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 
@@ -1318,7 +1334,7 @@ class BGPPeerAddressFamilyForm(NetBoxModelForm):
             self.fields['device'].initial = self.instance.peer.bgprouter.device_id
 
 
-class BGPPeerAddressFamilyFilterForm(NetBoxModelFilterSetForm):
+class BGPPeerAddressFamilyFilterForm(PrimaryModelFilterSetForm):
     model = BGPPeerAddressFamily
 
     peer_id = DynamicModelMultipleChoiceField(
@@ -1390,6 +1406,7 @@ class BGPPeerAddressFamilyFilterForm(NetBoxModelFilterSetForm):
             'route_reflector_client',
             name=_('Behaviour'),
         ),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 
@@ -1606,7 +1623,7 @@ class BGPPeergroupAddressFamilyForm(NetBoxModelForm):
             self.fields['device'].initial = self.instance.peergroup.bgprouter.device_id
 
 
-class BGPPeergroupAddressFamilyFilterForm(NetBoxModelFilterSetForm):
+class BGPPeergroupAddressFamilyFilterForm(PrimaryModelFilterSetForm):
     model = BGPPeergroupAddressFamily
 
     peergroup_id = DynamicModelMultipleChoiceField(
@@ -1678,6 +1695,7 @@ class BGPPeergroupAddressFamilyFilterForm(NetBoxModelFilterSetForm):
             'route_reflector_client',
             name=_('Behaviour'),
         ),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 

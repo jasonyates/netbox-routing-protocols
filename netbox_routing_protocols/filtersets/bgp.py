@@ -5,8 +5,8 @@ from django.db.models import Q
 from django.utils.translation import gettext as _
 
 from dcim.models import Device, Interface
-from ipam.models import ASN, VRF, IPAddress
-from netbox.filtersets import NetBoxModelFilterSet
+from ipam.models import ASN, VRF, IPAddress, Prefix
+from netbox.filtersets import PrimaryModelFilterSet
 from utilities.filtersets import register_filterset
 
 from netbox_routing_protocols.choices import BGPAddressFamilyChoices, BGPRedistributeProtocolChoices
@@ -38,7 +38,7 @@ IP_LIKE = re.compile(r'^[0-9a-fA-F.:/]+$')
 
 
 @register_filterset
-class BGPRouterFilterSet(NetBoxModelFilterSet):
+class BGPRouterFilterSet(PrimaryModelFilterSet):
     device_id = django_filters.ModelMultipleChoiceFilter(
         field_name='device',
         queryset=Device.objects.all(),
@@ -109,7 +109,7 @@ class BGPRouterFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class BGPPeergroupFilterSet(NetBoxModelFilterSet):
+class BGPPeergroupFilterSet(PrimaryModelFilterSet):
     bgprouter_id = django_filters.ModelMultipleChoiceFilter(
         field_name='bgprouter',
         queryset=BGPRouter.objects.all(),
@@ -174,7 +174,7 @@ class BGPPeergroupFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class BGPPeerFilterSet(NetBoxModelFilterSet):
+class BGPPeerFilterSet(PrimaryModelFilterSet):
     bgprouter_id = django_filters.ModelMultipleChoiceFilter(
         field_name='bgprouter',
         queryset=BGPRouter.objects.all(),
@@ -262,7 +262,7 @@ class BGPPeerFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class BGPAddressFamilyFilterSet(NetBoxModelFilterSet):
+class BGPAddressFamilyFilterSet(PrimaryModelFilterSet):
     bgprouter_id = django_filters.ModelMultipleChoiceFilter(
         field_name='bgprouter',
         queryset=BGPRouter.objects.all(),
@@ -294,6 +294,37 @@ class BGPAddressFamilyFilterSet(NetBoxModelFilterSet):
         queryset=RouteMap.objects.all(),
         label=_('Network route map (ID)'),
     )
+    # `aggregate_routes` and `networks` are both many-to-many to ipam.Prefix, so they
+    # cannot both be called `prefix_id`. Each gets a singular name of its own, by ID
+    # and by prefix value, so "which address families advertise this prefix?" is
+    # answerable from either side. `distinct` is required: joining a multi-valued
+    # relation would otherwise repeat a row once per matching prefix.
+    aggregate_route_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='aggregate_routes',
+        queryset=Prefix.objects.all(),
+        distinct=True,
+        label=_('Aggregate route (ID)'),
+    )
+    aggregate_route = django_filters.ModelMultipleChoiceFilter(
+        field_name='aggregate_routes__prefix',
+        queryset=Prefix.objects.all(),
+        to_field_name='prefix',
+        distinct=True,
+        label=_('Aggregate route (prefix)'),
+    )
+    network_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='networks',
+        queryset=Prefix.objects.all(),
+        distinct=True,
+        label=_('Network (ID)'),
+    )
+    network = django_filters.ModelMultipleChoiceFilter(
+        field_name='networks__prefix',
+        queryset=Prefix.objects.all(),
+        to_field_name='prefix',
+        distinct=True,
+        label=_('Network (prefix)'),
+    )
     family = django_filters.MultipleChoiceFilter(
         choices=BGPAddressFamilyChoices,
         label=_('Address family'),
@@ -319,7 +350,7 @@ class BGPAddressFamilyFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class BGPAddressFamilyRedistributeFilterSet(NetBoxModelFilterSet):
+class BGPAddressFamilyRedistributeFilterSet(PrimaryModelFilterSet):
     family_id = django_filters.ModelMultipleChoiceFilter(
         field_name='family',
         queryset=BGPAddressFamily.objects.all(),
@@ -370,7 +401,7 @@ class BGPAddressFamilyRedistributeFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class BGPPeerAddressFamilyFilterSet(NetBoxModelFilterSet):
+class BGPPeerAddressFamilyFilterSet(PrimaryModelFilterSet):
     peer_id = django_filters.ModelMultipleChoiceFilter(
         field_name='peer',
         queryset=BGPPeer.objects.all(),
@@ -444,7 +475,7 @@ class BGPPeerAddressFamilyFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class BGPPeergroupAddressFamilyFilterSet(NetBoxModelFilterSet):
+class BGPPeergroupAddressFamilyFilterSet(PrimaryModelFilterSet):
     peergroup_id = django_filters.ModelMultipleChoiceFilter(
         field_name='peergroup',
         queryset=BGPPeergroup.objects.all(),

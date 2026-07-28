@@ -5,9 +5,9 @@ from dcim.models import Device
 from ipam.models import Prefix
 from netbox.forms import (
     NetBoxModelBulkEditForm,
-    NetBoxModelFilterSetForm,
     NetBoxModelForm,
     NetBoxModelImportForm,
+    PrimaryModelFilterSetForm,
 )
 from utilities.forms import BOOLEAN_WITH_BLANK_CHOICES
 from utilities.forms.fields import (
@@ -66,7 +66,7 @@ class PrefixListForm(NetBoxModelForm):
         fields = ('device', 'name', 'address_family', 'description', 'comments', 'tags')
 
 
-class PrefixListFilterForm(NetBoxModelFilterSetForm):
+class PrefixListFilterForm(PrimaryModelFilterSetForm):
     model = PrefixList
 
     device_id = DynamicModelMultipleChoiceField(
@@ -84,6 +84,7 @@ class PrefixListFilterForm(NetBoxModelFilterSetForm):
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('device_id', 'address_family', name=_('Prefix List')),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 
@@ -199,7 +200,7 @@ class PrefixListRuleForm(NetBoxModelForm):
             self.fields['device'].initial = self.instance.prefix_list.device_id
 
 
-class PrefixListRuleFilterForm(NetBoxModelFilterSetForm):
+class PrefixListRuleFilterForm(PrimaryModelFilterSetForm):
     model = PrefixListRule
 
     device_id = DynamicModelMultipleChoiceField(
@@ -241,6 +242,7 @@ class PrefixListRuleFilterForm(NetBoxModelFilterSetForm):
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('device_id', 'prefix_list_id', 'action', name=_('Prefix List Rule')),
         FieldSet('prefix_id', 'match_any', 'match_default', name=_('Match')),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 
@@ -372,7 +374,7 @@ class RouteMapForm(NetBoxModelForm):
         fields = ('device', 'name', 'description', 'comments', 'tags')
 
 
-class RouteMapFilterForm(NetBoxModelFilterSetForm):
+class RouteMapFilterForm(PrimaryModelFilterSetForm):
     model = RouteMap
 
     device_id = DynamicModelMultipleChoiceField(
@@ -385,6 +387,7 @@ class RouteMapFilterForm(NetBoxModelFilterSetForm):
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('device_id', name=_('Route Map')),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 
@@ -483,7 +486,7 @@ class RouteMapRuleForm(NetBoxModelForm):
             self.fields['device'].initial = self.instance.route_map.device_id
 
 
-class RouteMapRuleFilterForm(NetBoxModelFilterSetForm):
+class RouteMapRuleFilterForm(PrimaryModelFilterSetForm):
     model = RouteMapRule
 
     device_id = DynamicModelMultipleChoiceField(
@@ -523,6 +526,7 @@ class RouteMapRuleFilterForm(NetBoxModelFilterSetForm):
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('device_id', 'route_map_id', 'action', name=_('Route Map Rule')),
         FieldSet('prefix_list_id', 'match_any', name=_('Match')),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 

@@ -6,7 +6,7 @@ from django.utils.translation import gettext as _
 
 from dcim.models import Device
 from ipam.models import Prefix
-from netbox.filtersets import NetBoxModelFilterSet
+from netbox.filtersets import PrimaryModelFilterSet
 from utilities.filtersets import register_filterset
 
 from netbox_routing_protocols.choices import ActionChoices, AddressFamilyChoices
@@ -26,7 +26,7 @@ IP_LIKE = re.compile(r'^[0-9a-fA-F.:/]+$')
 
 
 @register_filterset
-class PrefixListFilterSet(NetBoxModelFilterSet):
+class PrefixListFilterSet(PrimaryModelFilterSet):
     device_id = django_filters.ModelMultipleChoiceFilter(
         field_name='device',
         queryset=Device.objects.all(),
@@ -61,7 +61,7 @@ class PrefixListFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class PrefixListRuleFilterSet(NetBoxModelFilterSet):
+class PrefixListRuleFilterSet(PrimaryModelFilterSet):
     prefix_list_id = django_filters.ModelMultipleChoiceFilter(
         field_name='prefix_list',
         queryset=PrefixList.objects.all(),
@@ -124,7 +124,7 @@ class PrefixListRuleFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class RouteMapFilterSet(NetBoxModelFilterSet):
+class RouteMapFilterSet(PrimaryModelFilterSet):
     device_id = django_filters.ModelMultipleChoiceFilter(
         field_name='device',
         queryset=Device.objects.all(),
@@ -155,7 +155,7 @@ class RouteMapFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class RouteMapRuleFilterSet(NetBoxModelFilterSet):
+class RouteMapRuleFilterSet(PrimaryModelFilterSet):
     route_map_id = django_filters.ModelMultipleChoiceFilter(
         field_name='route_map',
         queryset=RouteMap.objects.all(),

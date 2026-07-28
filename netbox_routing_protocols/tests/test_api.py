@@ -14,8 +14,6 @@ previously broken:
 * ``PasswordDisclosureTestCase`` — the BGP MD5 key is settable but never returned.
 """
 
-import re
-
 from django.urls import reverse
 from rest_framework import status
 
@@ -94,35 +92,6 @@ def related_view_permissions(model_name):
         *CORE_VIEW_PERMISSIONS,
         *[f'netbox_routing_protocols.view_{name}' for name in PLUGIN_MODEL_NAMES if name != model_name],
     )
-
-
-class ProxiedRelationQueryMixin:
-    """
-    Repairs the auto-generated GraphQL query for types exposing ``device`` and
-    ``vrf`` through a resolver.
-
-    ``BGPPeerType``, ``BGPPeergroupType`` and ``BGPAddressFamilyType`` reach their
-    device and VRF through ``bgprouter``, so those two fields are custom resolvers
-    rather than columns. They are annotated non-optional
-    (``-> Annotated['DeviceType', ...]``), and NetBox's generic query builder has
-    no branch for a bare ``LazyType``: it falls through to the scalar case and
-    emits ``device`` instead of ``device { id }``, which the schema rejects
-    before execution.
-
-    Every relation in NetBox core — resolver-backed or not — is declared
-    ``| None``, which the builder does handle. Until these three follow suit, the
-    selections are patched here so the standard GET and list assertions still run
-    in full rather than being skipped. The queries themselves execute correctly
-    against the running schema; only the generated query text is wrong.
-    """
-
-    PROXIED_RELATIONS = ('device', 'vrf')
-
-    def _build_query_with_filter(self, name, filter_string):
-        query = super()._build_query_with_filter(name, filter_string)
-        for field in self.PROXIED_RELATIONS:
-            query = re.sub(rf'^(\s*){field}$', rf'\1{field} {{ id }}', query, flags=re.MULTILINE)
-        return query
 
 
 class RoutingProtocolsAPITestCases:
@@ -435,7 +404,7 @@ class BGPRouterTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
         ]
 
 
-class BGPPeergroupTestCase(ProxiedRelationQueryMixin, RoutingProtocolsAPITestCases.APIViewTestCase):
+class BGPPeergroupTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
     model = BGPPeergroup
     user_permissions = related_view_permissions('bgppeergroup')
     graphql_base_name = 'bgp_peergroup'
@@ -477,7 +446,7 @@ class BGPPeergroupTestCase(ProxiedRelationQueryMixin, RoutingProtocolsAPITestCas
         ]
 
 
-class BGPPeerTestCase(ProxiedRelationQueryMixin, RoutingProtocolsAPITestCases.APIViewTestCase):
+class BGPPeerTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
     model = BGPPeer
     user_permissions = related_view_permissions('bgppeer')
     # See PrefixListRuleTestCase: falling back to create_data[0] would PATCH a
@@ -520,7 +489,7 @@ class BGPPeerTestCase(ProxiedRelationQueryMixin, RoutingProtocolsAPITestCases.AP
         ]
 
 
-class BGPAddressFamilyTestCase(ProxiedRelationQueryMixin, RoutingProtocolsAPITestCases.APIViewTestCase):
+class BGPAddressFamilyTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
     model = BGPAddressFamily
     user_permissions = related_view_permissions('bgpaddressfamily')
     # BGPAddressFamily has no name property; its brief representation uses `family`.

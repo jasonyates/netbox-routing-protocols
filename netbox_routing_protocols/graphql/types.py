@@ -170,18 +170,21 @@ class BGPPeerAttributesMixin:
     Session attributes shared by BGPPeer and BGPPeergroup.
 
     ``device`` and ``vrf`` are Python properties fed by ``bgprouter``, so they
-    are resolved here rather than being auto-generated from a column.
+    are resolved here rather than being auto-generated from a column. Like every
+    resolver-returned relation in NetBox core they are declared optional: a
+    non-optional relation makes the generic query builder emit a bare field name
+    instead of a subfield selection, which the schema then rejects.
     """
 
     bgprouter: Annotated['BGPRouterType', strawberry.lazy('netbox_routing_protocols.graphql.types')]
     remote_as: Annotated['ASNType', strawberry.lazy('ipam.graphql.types')]
 
     @strawberry_django.field(select_related=['bgprouter__device'])
-    def device(self) -> Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')]:
+    def device(self) -> Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')] | None:
         return self.device
 
     @strawberry_django.field(select_related=['bgprouter__vrf'])
-    def vrf(self) -> Annotated['VRFType', strawberry.lazy('ipam.graphql.types')]:
+    def vrf(self) -> Annotated['VRFType', strawberry.lazy('ipam.graphql.types')] | None:
         return self.vrf
 
 
@@ -239,12 +242,13 @@ class BGPAddressFamilyType(OwnerMixin, NetBoxObjectType):
         Annotated['BGPAddressFamilyRedistributeType', strawberry.lazy('netbox_routing_protocols.graphql.types')]
     ]
 
+    # Resolver-returned relations are declared optional, matching NetBox core.
     @strawberry_django.field(select_related=['bgprouter__device'])
-    def device(self) -> Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')]:
+    def device(self) -> Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')] | None:
         return self.device
 
     @strawberry_django.field(select_related=['bgprouter__vrf'])
-    def vrf(self) -> Annotated['VRFType', strawberry.lazy('ipam.graphql.types')]:
+    def vrf(self) -> Annotated['VRFType', strawberry.lazy('ipam.graphql.types')] | None:
         return self.vrf
 
 

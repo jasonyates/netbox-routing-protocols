@@ -80,12 +80,6 @@ SEARCH_VALUES = (
     '',  # nothing at all
 )
 
-# The `owner` foreign key contributed by PrimaryModel has no corresponding filter
-# on any of this plugin's filtersets, because they extend NetBoxModelFilterSet
-# rather than NetBox 4.6's PrimaryModelFilterSet (which mixes in OwnerFilterMixin).
-# Ignored here so the audit covers everything else; see the suite notes.
-IGNORED_FIELDS = ('owner',)
-
 
 class NoPasswordFilterTests:
     """
@@ -263,6 +257,13 @@ class FilterSetTestData(BaseTestData):
                 export_to_evpn=True,
             ),
         ]
+        # Aggregates and network statements overlap deliberately: prefixes4[2] is a
+        # network on two families, and families[0] aggregates two prefixes, so the
+        # many-to-many filters are exercised against both fan-out directions.
+        cls.address_families[0].aggregate_routes.set([cls.prefixes4[0], cls.prefixes4[1]])
+        cls.address_families[0].networks.set([cls.prefixes4[2]])
+        cls.address_families[1].aggregate_routes.set([cls.prefixes6[0]])
+        cls.address_families[1].networks.set([cls.prefixes4[2], cls.prefixes6[1]])
 
         cls.redistributions = [
             BGPAddressFamilyRedistribute.objects.create(
@@ -330,7 +331,6 @@ class FilterSetTestData(BaseTestData):
 class StaticRouteFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):
     queryset = StaticRoute.objects.all()
     filterset = StaticRouteFilterSet
-    ignore_fields = IGNORED_FIELDS
 
     def test_device(self):
         params = {'device_id': [self.devices[0].pk]}
@@ -371,7 +371,6 @@ class StaticRouteFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, Chang
 class PrefixListFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):
     queryset = PrefixList.objects.all()
     filterset = PrefixListFilterSet
-    ignore_fields = IGNORED_FIELDS
 
     def test_name(self):
         params = {'name': ['PL-CORE-IN']}
@@ -392,7 +391,6 @@ class PrefixListFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, Change
 class PrefixListRuleFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):
     queryset = PrefixListRule.objects.all()
     filterset = PrefixListRuleFilterSet
-    ignore_fields = IGNORED_FIELDS
 
     def test_prefix_list(self):
         params = {'prefix_list_id': [self.prefix_lists[0].pk]}
@@ -425,7 +423,6 @@ class PrefixListRuleFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, Ch
 class RouteMapFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):
     queryset = RouteMap.objects.all()
     filterset = RouteMapFilterSet
-    ignore_fields = IGNORED_FIELDS
 
     def test_name(self):
         params = {'name': ['RM-CORE-IN']}
@@ -442,7 +439,6 @@ class RouteMapFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLo
 class RouteMapRuleFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):
     queryset = RouteMapRule.objects.all()
     filterset = RouteMapRuleFilterSet
-    ignore_fields = IGNORED_FIELDS
 
     def test_route_map(self):
         params = {'route_map_id': [self.route_maps[0].pk]}
@@ -476,7 +472,6 @@ class RouteMapRuleFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, Chan
 class BGPRouterFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):
     queryset = BGPRouter.objects.all()
     filterset = BGPRouterFilterSet
-    ignore_fields = IGNORED_FIELDS
 
     def test_device(self):
         params = {'device_id': [self.devices[0].pk]}
@@ -510,7 +505,7 @@ class BGPPeergroupFilterSetTestCase(
 ):
     queryset = BGPPeergroup.objects.all()
     filterset = BGPPeergroupFilterSet
-    ignore_fields = (*IGNORED_FIELDS, 'password')
+    ignore_fields = ('password',)
 
     def test_bgprouter(self):
         params = {'bgprouter_id': [self.bgp_routers[0].pk]}
@@ -540,7 +535,7 @@ class BGPPeerFilterSetTestCase(
 ):
     queryset = BGPPeer.objects.all()
     filterset = BGPPeerFilterSet
-    ignore_fields = (*IGNORED_FIELDS, 'password')
+    ignore_fields = ('password',)
 
     def test_bgprouter(self):
         params = {'bgprouter_id': [self.bgp_routers[0].pk]}
@@ -573,9 +568,20 @@ class BGPPeerFilterSetTestCase(
 class BGPAddressFamilyFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):
     queryset = BGPAddressFamily.objects.all()
     filterset = BGPAddressFamilyFilterSet
-    # aggregate_routes and networks are many-to-many relations to ipam.Prefix; both
-    # would map to the same `prefix_id` filter name and neither is exposed today.
-    ignore_fields = (*IGNORED_FIELDS, 'aggregate_routes', 'networks')
+
+    # aggregate_routes and networks are both many-to-many to ipam.Prefix, so the
+    # audit's default naming (the related model's verbose name) would expect a
+    # single `prefix_id` filter to stand for both. Each relation has a filter of
+    # its own instead; name them here so the audit checks for both.
+    M2M_FILTER_NAMES = {
+        'aggregate_routes': 'aggregate_route',
+        'networks': 'network',
+    }
+
+    def get_m2m_filter_name(self, field):
+        if field.name in self.M2M_FILTER_NAMES:
+            return self.M2M_FILTER_NAMES[field.name]
+        return super().get_m2m_filter_name(field)
 
     def test_bgprouter(self):
         params = {'bgprouter_id': [self.bgp_routers[0].pk]}
@@ -598,6 +604,39 @@ class BGPAddressFamilyFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, 
     def test_export_to_evpn(self):
         self.assertEqual(self.filterset({'export_to_evpn': True}, self.queryset).qs.count(), 1)
 
+    def test_aggregate_routes(self):
+        params = {'aggregate_route_id': [self.prefixes4[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+        params = {'aggregate_route': [str(self.prefixes4[0].prefix)]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+        # Two prefixes on two different families: one row each.
+        params = {'aggregate_route_id': [self.prefixes4[0].pk, self.prefixes6[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
+        # Two prefixes on the *same* family: still one row, not one per prefix.
+        params = {'aggregate_route_id': [self.prefixes4[0].pk, self.prefixes4[1].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_networks(self):
+        # prefixes4[2] is a network statement on both families.
+        params = {'network_id': [self.prefixes4[2].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
+        params = {'network': [str(self.prefixes4[2].prefix)]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
+        params = {'network_id': [self.prefixes6[1].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_aggregate_routes_and_networks_are_distinct_filters(self):
+        # A prefix used only as an aggregate must not match the network filter.
+        self.assertEqual(
+            self.filterset({'network_id': [self.prefixes4[0].pk]}, self.queryset).qs.count(),
+            0,
+        )
+        # ...and vice versa.
+        self.assertEqual(
+            self.filterset({'aggregate_route_id': [self.prefixes4[2].pk]}, self.queryset).qs.count(),
+            0,
+        )
+
     def test_search_matches_route_map_name(self):
         self.assertEqual(self.filterset({'q': 'RM-CORE-OUT'}, self.queryset).qs.count(), 1)
 
@@ -607,7 +646,6 @@ class BGPAddressFamilyRedistributeFilterSetTestCase(
 ):
     queryset = BGPAddressFamilyRedistribute.objects.all()
     filterset = BGPAddressFamilyRedistributeFilterSet
-    ignore_fields = IGNORED_FIELDS
 
     def test_family(self):
         params = {'family_id': [self.address_families[0].pk]}
@@ -637,7 +675,6 @@ class BGPPeerAddressFamilyFilterSetTestCase(
 ):
     queryset = BGPPeerAddressFamily.objects.all()
     filterset = BGPPeerAddressFamilyFilterSet
-    ignore_fields = IGNORED_FIELDS
 
     def test_peer(self):
         params = {'peer_id': [self.peers[0].pk]}
@@ -668,7 +705,6 @@ class BGPPeergroupAddressFamilyFilterSetTestCase(
 ):
     queryset = BGPPeergroupAddressFamily.objects.all()
     filterset = BGPPeergroupAddressFamilyFilterSet
-    ignore_fields = IGNORED_FIELDS
 
     def test_peergroup(self):
         params = {'peergroup_id': [self.peergroups[0].pk]}

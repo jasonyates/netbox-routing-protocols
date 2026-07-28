@@ -6,7 +6,7 @@ from django.utils.translation import gettext as _
 
 from dcim.models import Device
 from ipam.models import VRF, IPAddress, Prefix
-from netbox.filtersets import NetBoxModelFilterSet
+from netbox.filtersets import PrimaryModelFilterSet
 from utilities.filtersets import register_filterset
 
 from netbox_routing_protocols.models import StaticRoute
@@ -20,7 +20,7 @@ IP_LIKE = re.compile(r'^[0-9a-fA-F.:/]+$')
 
 
 @register_filterset
-class StaticRouteFilterSet(NetBoxModelFilterSet):
+class StaticRouteFilterSet(PrimaryModelFilterSet):
     device_id = django_filters.ModelMultipleChoiceFilter(
         field_name='device',
         queryset=Device.objects.all(),

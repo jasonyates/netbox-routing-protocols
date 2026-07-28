@@ -5,9 +5,9 @@ from dcim.models import Device
 from ipam.models import VRF, IPAddress, Prefix
 from netbox.forms import (
     NetBoxModelBulkEditForm,
-    NetBoxModelFilterSetForm,
     NetBoxModelForm,
     NetBoxModelImportForm,
+    PrimaryModelFilterSetForm,
 )
 from utilities.forms import BOOLEAN_WITH_BLANK_CHOICES
 from utilities.forms.fields import (
@@ -80,7 +80,7 @@ class StaticRouteForm(NetBoxModelForm):
         )
 
 
-class StaticRouteFilterForm(NetBoxModelFilterSetForm):
+class StaticRouteFilterForm(PrimaryModelFilterSetForm):
     model = StaticRoute
 
     device_id = DynamicModelMultipleChoiceField(
@@ -114,6 +114,7 @@ class StaticRouteFilterForm(NetBoxModelFilterSetForm):
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('device_id', 'vrf_id', name=_('Assignment')),
         FieldSet('prefix_id', 'default_route', 'nexthop_id', name=_('Destination')),
+        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
 
