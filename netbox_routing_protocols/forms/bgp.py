@@ -123,6 +123,62 @@ class BGPRouterCSVMixin(forms.Form):
         return exclude
 
 
+class BGPPasswordMixin(forms.Form):
+    """
+    Edits the BGP MD5 key without ever writing it back into the page.
+
+    ``PasswordInput(render_value=True)`` puts the stored key into the edit form's
+    HTML as a ``value=`` attribute, so anyone who can open the edit page — or
+    anything that caches, logs or screenshots it — can read the key straight out
+    of the source. The widget here renders empty instead.
+
+    That makes a blank submission ambiguous, so it is resolved in the users'
+    favour: blank means "leave the stored key alone", and removing a key is an
+    explicit tick of ``clear_password`` rather than a side effect of saving an
+    unrelated change. Without that affordance a key could never be removed
+    through the UI at all.
+    """
+
+    password = forms.CharField(
+        label=_('Password'),
+        required=False,
+        widget=forms.PasswordInput(),
+        help_text=_('BGP MD5 authentication key. Leave blank to keep the current key.'),
+    )
+    clear_password = forms.BooleanField(
+        label=_('Clear Password'),
+        required=False,
+        help_text=_('Remove the stored authentication key from this session.'),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Nothing to clear on a new object, and offering the tick there would only
+        # invite the "set a key and clear it in the same submission" error below.
+        if not self.instance.pk:
+            del self.fields['clear_password']
+
+    def clean(self):
+        super().clean()
+        # NetBox's CheckLastUpdatedMixin.clean() returns None on several paths, so the
+        # return value of super() cannot be relied on; read the canonical dict instead.
+        cleaned_data = self.cleaned_data
+
+        if cleaned_data.get('clear_password'):
+            if cleaned_data.get('password'):
+                raise forms.ValidationError(
+                    {
+                        'password': _('Cannot set a new password and clear the existing one in the same change.'),
+                    }
+                )
+            cleaned_data['password'] = ''
+        elif not cleaned_data.get('password'):
+            cleaned_data['password'] = self.instance.password
+
+        return cleaned_data
+
+
 #
 # BGP routers
 #
@@ -336,7 +392,7 @@ class BGPRouterImportForm(NetBoxModelImportForm):
 #
 
 
-class BGPPeergroupForm(NetBoxModelForm):
+class BGPPeergroupForm(BGPPasswordMixin, NetBoxModelForm):
     bgprouter = DynamicModelChoiceField(
         label=_('BGP Router'),
         queryset=BGPRouter.objects.all(),
@@ -346,17 +402,11 @@ class BGPPeergroupForm(NetBoxModelForm):
         label=_('Remote AS'),
         queryset=ASN.objects.all(),
     )
-    password = forms.CharField(
-        label=_('Password'),
-        required=False,
-        widget=forms.PasswordInput(render_value=True),
-        help_text=_('BGP MD5 authentication key.'),
-    )
     comments = CommentField()
 
     fieldsets = (
         FieldSet('bgprouter', 'name', 'enable', name=_('Peer Group')),
-        FieldSet('remote_as', 'bfd', 'password', name=_('Session')),
+        FieldSet('remote_as', 'bfd', 'password', 'clear_password', name=_('Session')),
         FieldSet('ebgp_multihop', 'ebgp_multihop_ttl', name=_('eBGP Multihop')),
         FieldSet('description', 'tags', name=_('Attributes')),
     )
@@ -453,10 +503,14 @@ class BGPPeergroupBulkEditForm(NetBoxModelBulkEditForm):
         required=False,
         widget=BulkEditNullBooleanSelect(),
     )
+    # Bulk edit never renders an existing value (there is no single instance), but the
+    # widget is left non-rendering anyway so no future change can start echoing keys.
+    # A blank entry leaves each selected object's key alone; "Set Null" clears it.
     password = forms.CharField(
         label=_('Password'),
         required=False,
-        widget=forms.PasswordInput(render_value=True),
+        widget=forms.PasswordInput(),
+        help_text=_("Leave blank to keep each object's current key."),
     )
     ebgp_multihop = forms.NullBooleanField(
         label=_('eBGP Multihop'),
@@ -521,7 +575,7 @@ class BGPPeergroupImportForm(BGPRouterCSVMixin, NetBoxModelImportForm):
 #
 
 
-class BGPPeerForm(NetBoxModelForm):
+class BGPPeerForm(BGPPasswordMixin, NetBoxModelForm):
     bgprouter = DynamicModelChoiceField(
         label=_('BGP Router'),
         queryset=BGPRouter.objects.all(),
@@ -560,12 +614,6 @@ class BGPPeerForm(NetBoxModelForm):
         label=_('Remote AS'),
         queryset=ASN.objects.all(),
     )
-    password = forms.CharField(
-        label=_('Password'),
-        required=False,
-        widget=forms.PasswordInput(render_value=True),
-        help_text=_('BGP MD5 authentication key.'),
-    )
     comments = CommentField()
 
     fieldsets = (
@@ -578,7 +626,7 @@ class BGPPeerForm(NetBoxModelForm):
             ),
             name=_('Addressing'),
         ),
-        FieldSet('remote_as', 'bfd', 'password', name=_('Session')),
+        FieldSet('remote_as', 'bfd', 'password', 'clear_password', name=_('Session')),
         FieldSet('ebgp_multihop', 'ebgp_multihop_ttl', name=_('eBGP Multihop')),
         FieldSet('description', 'tags', name=_('Attributes')),
     )
@@ -714,10 +762,14 @@ class BGPPeerBulkEditForm(NetBoxModelBulkEditForm):
         required=False,
         widget=BulkEditNullBooleanSelect(),
     )
+    # Bulk edit never renders an existing value (there is no single instance), but the
+    # widget is left non-rendering anyway so no future change can start echoing keys.
+    # A blank entry leaves each selected object's key alone; "Set Null" clears it.
     password = forms.CharField(
         label=_('Password'),
         required=False,
-        widget=forms.PasswordInput(render_value=True),
+        widget=forms.PasswordInput(),
+        help_text=_("Leave blank to keep each object's current key."),
     )
     ebgp_multihop = forms.NullBooleanField(
         label=_('eBGP Multihop'),

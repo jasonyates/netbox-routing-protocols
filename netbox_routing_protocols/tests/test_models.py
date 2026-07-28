@@ -14,12 +14,20 @@ to get wrong in production:
 * what happens to routing objects when the prefixes they reference are deleted.
 """
 
+import uuid
+
+from django.apps import apps
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
 from django.db.models.signals import post_save
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 
+from core.choices import ObjectChangeActionChoices
+from core.models import ObjectChange
 from ipam.models import Prefix
+from netbox.context_managers import event_tracking
+from users.models import User
 
 from netbox_routing_protocols.choices import (
     ActionChoices,
@@ -44,6 +52,20 @@ from netbox_routing_protocols.models import (
 from netbox_routing_protocols.signals import DEFAULT_DENY_SEQUENCE
 
 from .base import PLUGINS_CONFIG_NO_DEFAULT_DENY, BaseTestData, create_ip_addresses, create_prefixes
+
+
+def build_request(user):
+    """
+    A minimal request for ``event_tracking()``.
+
+    NetBox writes ObjectChange rows from its post-save receivers, which no-op outside a
+    request context. Model-level tests that need to assert on the change log therefore
+    have to supply one.
+    """
+    request = RequestFactory().get('/')
+    request.id = uuid.uuid4()
+    request.user = user
+    return request
 
 
 class StaticRouteTestCase(BaseTestData, TestCase):
@@ -194,8 +216,10 @@ class StaticRouteTestCase(BaseTestData, TestCase):
 
     def test_duplicate_prefix_in_global_table_is_rejected(self):
         """
-        The unique constraints skip rows where vrf IS NULL, so clean() covers the
-        global routing table instead.
+        Routes in the global table (vrf IS NULL) are covered by a partial unique
+        constraint, not by a Python existence check. The direct save() below is the
+        point of the test: a SELECT-then-INSERT in clean() would let two concurrent
+        writers both commit, so the rejection has to come from the database.
         """
         StaticRoute.objects.create(
             device=self.devices[0],
@@ -209,7 +233,26 @@ class StaticRouteTestCase(BaseTestData, TestCase):
         )
         with self.assertRaises(ValidationError) as ctx:
             duplicate.full_clean()
-        self.assertIn('prefix', ctx.exception.message_dict)
+        self.assertIn(
+            'A static route for this prefix already exists on this device in the global routing table.',
+            ctx.exception.messages,
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            duplicate.save()
+
+    def test_database_rejects_a_duplicate_global_prefix_written_without_validation(self):
+        """A create() that never calls full_clean() — the API-race path — must still fail."""
+        StaticRoute.objects.create(
+            device=self.devices[0],
+            prefix=self.prefixes4[0],
+            nexthop=self.addresses4[0],
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            StaticRoute.objects.create(
+                device=self.devices[0],
+                prefix=self.prefixes4[0],
+                nexthop=self.addresses4[1],
+            )
 
     def test_duplicate_default_route_in_global_table_is_rejected(self):
         StaticRoute.objects.create(
@@ -224,7 +267,61 @@ class StaticRouteTestCase(BaseTestData, TestCase):
         )
         with self.assertRaises(ValidationError) as ctx:
             duplicate.full_clean()
-        self.assertIn('nexthop', ctx.exception.message_dict)
+        self.assertIn(
+            'A default route to this next hop already exists on this device in the global routing table.',
+            ctx.exception.messages,
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            duplicate.save()
+
+    def test_database_rejects_a_duplicate_global_default_route_written_without_validation(self):
+        StaticRoute.objects.create(
+            device=self.devices[0],
+            nexthop=self.addresses4[0],
+            default_route=True,
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            StaticRoute.objects.create(
+                device=self.devices[0],
+                nexthop=self.addresses4[0],
+                default_route=True,
+            )
+
+    def test_two_global_default_routes_to_different_next_hops_are_allowed(self):
+        """
+        The global-prefix constraint covers (device, prefix), and a default route has no
+        prefix. NULLs compare as distinct, so ECMP defaults must not collide with it.
+        """
+        StaticRoute.objects.create(
+            device=self.devices[0],
+            nexthop=self.addresses4[0],
+            default_route=True,
+        )
+        route = StaticRoute(
+            device=self.devices[0],
+            nexthop=self.addresses4[1],
+            default_route=True,
+        )
+        route.full_clean()
+        route.save()
+        self.assertEqual(StaticRoute.objects.filter(device=self.devices[0], default_route=True).count(), 2)
+
+    def test_the_same_global_prefix_is_allowed_alongside_a_vrf_copy(self):
+        """The global constraints are conditional on vrf IS NULL and must not reach into a VRF."""
+        StaticRoute.objects.create(
+            device=self.devices[0],
+            prefix=self.prefixes4[0],
+            nexthop=self.addresses4[0],
+        )
+        route = StaticRoute(
+            device=self.devices[0],
+            vrf=self.vrfs[0],
+            prefix=self.prefixes4[0],
+            nexthop=self.addresses4[0],
+        )
+        route.full_clean()
+        route.save()
+        self.assertEqual(StaticRoute.objects.filter(prefix=self.prefixes4[0]).count(), 2)
 
     def test_same_prefix_on_another_device_is_allowed(self):
         StaticRoute.objects.create(
@@ -400,12 +497,29 @@ class PrefixListRuleTestCase(BaseTestData, TestCase):
             sequence=10,
             action=ActionChoices.ACTION_PERMIT,
             prefix=self.prefixes4[0],
-            min_prefix_length=24,
+            min_prefix_length=25,
             max_prefix_length=24,
         )
         with self.assertRaises(ValidationError) as ctx:
             rule.full_clean()
         self.assertIn('max_prefix_length', ctx.exception.message_dict)
+
+    def test_clean_allows_equal_prefix_lengths(self):
+        """``ge 24 le 24`` is how every mainstream platform spells "exactly a /24"."""
+        rule = PrefixListRule(
+            prefix_list=self.prefix_list4,
+            sequence=11,
+            action=ActionChoices.ACTION_PERMIT,
+            prefix=self.prefixes4[0],
+            min_prefix_length=24,
+            max_prefix_length=24,
+        )
+        rule.full_clean()
+        rule.save()
+
+        rule.refresh_from_db()
+        self.assertEqual(rule.min_prefix_length, 24)
+        self.assertEqual(rule.max_prefix_length, 24)
 
     def test_clean_bounds_prefix_length_to_address_family(self):
         """A /64 is legal in an IPv6 list but not in an IPv4 one."""
@@ -676,6 +790,16 @@ class BGPPeerTestCase(BaseTestData, TestCase):
         )
         self.assertEqual(peer.name, 'Ethernet1')
         self.assertEqual(str(peer), 'Ethernet1')
+
+    def test_name_does_not_raise_on_unsaved_instance(self):
+        """
+        A saved row always has an address or an interface under the CheckConstraint, but
+        the property is reached from unsaved instances during form and serializer
+        validation — where raising AttributeError would surface as a 500, not a 400.
+        """
+        peer = BGPPeer(bgprouter=self.router, remote_as=self.asns[0])
+        self.assertEqual(peer.name, '')
+        self.assertEqual(str(peer), '')
 
     def test_address_and_interface_are_mutually_exclusive(self):
         both = BGPPeer(
@@ -1082,6 +1206,7 @@ class BGPPrefixRemovalSignalTestCase(BaseTestData, TestCase):
     def setUpTestData(cls):
         cls.build_topology()
         cls.router = BGPRouter.objects.create(device=cls.devices[0], vrf=cls.vrfs[0])
+        cls.user = User.objects.create_user(username='prefix-removal')
 
     def test_deleting_a_prefix_removes_it_from_the_address_family(self):
         family = BGPAddressFamily.objects.create(bgprouter=self.router, family=BGPAddressFamilyChoices.AFI_IPV4_UNICAST)
@@ -1093,6 +1218,217 @@ class BGPPrefixRemovalSignalTestCase(BaseTestData, TestCase):
         family.refresh_from_db()
         self.assertEqual(list(family.aggregate_routes.all()), [self.prefixes4[1]])
         self.assertEqual(list(family.networks.all()), [])
+
+    def test_deleting_a_prefix_records_the_removal_in_the_change_log(self):
+        """
+        The M2M rows would be dropped silently by the cascade; producing a change log
+        entry is the entire reason this receiver exists, so asserting only that the rows
+        went away would leave the actual behaviour untested. Change logging is driven by
+        request context, hence event_tracking().
+        """
+        family = BGPAddressFamily.objects.create(bgprouter=self.router, family=BGPAddressFamilyChoices.AFI_IPV4_UNICAST)
+        family.aggregate_routes.set([self.prefixes4[0], self.prefixes4[1]])
+        family.networks.set([self.prefixes4[0]])
+
+        removed_pk = self.prefixes4[0].pk
+        kept_pk = self.prefixes4[1].pk
+
+        request = build_request(self.user)
+        with event_tracking(request):
+            self.prefixes4[0].delete()
+
+        change = ObjectChange.objects.get(
+            changed_object_type=ContentType.objects.get_for_model(BGPAddressFamily),
+            changed_object_id=family.pk,
+        )
+        self.assertEqual(change.action, ObjectChangeActionChoices.ACTION_UPDATE)
+        self.assertEqual(change.request_id, request.id)
+
+        # The prefix is gone from the "after" picture but still present in the "before" one,
+        # which is what makes the change log a usable record of what was lost.
+        self.assertIn(removed_pk, change.prechange_data['aggregate_routes'])
+        self.assertIn(removed_pk, change.prechange_data['networks'])
+        self.assertNotIn(removed_pk, change.postchange_data['aggregate_routes'])
+        self.assertNotIn(removed_pk, change.postchange_data['networks'])
+        self.assertIn(kept_pk, change.postchange_data['aggregate_routes'])
+
+
+class BGPPasswordChangeLogTestCase(BaseTestData, TestCase):
+    """
+    The BGP MD5 key must not reach ObjectChange.
+
+    ``serialize_object()`` walks every concrete field, so a write-only REST serializer
+    and a GraphQL exclusion do nothing for this path: without the override on
+    ``BGPPeerAttributes`` the plaintext key lands in ``prechange_data`` and
+    ``postchange_data`` on every create and update, readable by anyone holding
+    ``core.view_objectchange``.
+    """
+
+    SECRET = 'SUPERSECRET-MD5'
+    ROTATED = 'ROTATED-MD5'
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+        cls.router = BGPRouter.objects.create(device=cls.devices[0], vrf=cls.vrfs[0])
+        cls.user = User.objects.create_user(username='changelog-probe')
+
+        cls.peergroup = BGPPeergroup.objects.create(
+            bgprouter=cls.router,
+            name='PG-SECRET',
+            remote_as=cls.asns[0],
+            password=cls.SECRET,
+        )
+        cls.peer = BGPPeer.objects.create(
+            bgprouter=cls.router,
+            remote_address=cls.addresses4[0],
+            remote_as=cls.asns[0],
+            password=cls.SECRET,
+        )
+
+    def subjects(self):
+        return (('BGPPeer', self.peer), ('BGPPeergroup', self.peergroup))
+
+    def assertNoSecret(self, data, label):
+        self.assertIsNotNone(data, f'{label}: expected serialized data')
+        self.assertNotIn('password', data, f'{label}: password key present')
+        self.assertNotIn(self.SECRET, str(data), f'{label}: password value present')
+        self.assertNotIn(self.ROTATED, str(data), f'{label}: rotated password value present')
+
+    def test_serialize_object_omits_the_password(self):
+        for label, instance in self.subjects():
+            with self.subTest(model=label):
+                self.assertNoSecret(instance.serialize_object(), f'{label}.serialize_object()')
+
+    def test_serialize_object_honours_a_caller_supplied_exclude(self):
+        """The override must add to the caller's exclusions, not replace them."""
+        for label, instance in self.subjects():
+            with self.subTest(model=label):
+                data = instance.serialize_object(exclude=['description'])
+                self.assertNotIn('password', data)
+                self.assertNotIn('description', data)
+                self.assertIn('enable', data)
+
+    def test_create_objectchange_omits_the_password(self):
+        for label, instance in self.subjects():
+            with self.subTest(model=label):
+                change = instance.to_objectchange(ObjectChangeActionChoices.ACTION_CREATE)
+                self.assertNoSecret(change.postchange_data, f'{label} create postchange_data')
+
+    def test_update_objectchange_omits_the_password_from_both_snapshots(self):
+        for label, instance in self.subjects():
+            with self.subTest(model=label):
+                instance.snapshot()
+                instance.password = self.ROTATED
+                instance.description = 'rotated'
+                change = instance.to_objectchange(ObjectChangeActionChoices.ACTION_UPDATE)
+
+                self.assertNoSecret(change.prechange_data, f'{label} update prechange_data')
+                self.assertNoSecret(change.postchange_data, f'{label} update postchange_data')
+
+    def test_ordinary_change_logging_still_works(self):
+        """Excluding one field must not blunt the change log for everything else."""
+        for label, instance in self.subjects():
+            with self.subTest(model=label):
+                instance.snapshot()
+                instance.description = f'{label} updated'
+                instance.bfd = not instance.bfd
+                change = instance.to_objectchange(ObjectChangeActionChoices.ACTION_UPDATE)
+
+                self.assertEqual(change.prechange_data['description'], '')
+                self.assertEqual(change.postchange_data['description'], f'{label} updated')
+                self.assertNotEqual(change.prechange_data['bfd'], change.postchange_data['bfd'])
+                # Fields the plugin does not touch are still recorded in full.
+                self.assertEqual(change.postchange_data['remote_as'], self.asns[0].pk)
+
+    def test_diff_reports_the_other_fields_and_never_the_password(self):
+        for label, instance in self.subjects():
+            with self.subTest(model=label):
+                instance.snapshot()
+                instance.password = self.ROTATED
+                instance.description = 'diffed'
+                change = instance.to_objectchange(ObjectChangeActionChoices.ACTION_UPDATE)
+                change.user = self.user
+                # request_id is non-null and is normally stamped by the change-logging
+                # middleware; there is no request here, so supply one.
+                change.request_id = uuid.uuid4()
+                change.save()
+
+                # Read the row back rather than diffing the in-memory instance, so the
+                # assertion covers what is actually stored and served.
+                diff = ObjectChange.objects.get(pk=change.pk).diff()
+                self.assertEqual(diff['post']['description'], 'diffed')
+                self.assertNotIn('password', diff['pre'])
+                self.assertNotIn('password', diff['post'])
+                self.assertNotIn(self.ROTATED, str(diff))
+
+    def test_a_saved_objectchange_row_holds_no_password(self):
+        """End to end through the signal handlers, not just the model method."""
+        request = build_request(self.user)
+        with event_tracking(request):
+            peergroup = BGPPeergroup.objects.create(
+                bgprouter=self.router,
+                name='PG-VIA-SIGNAL',
+                remote_as=self.asns[0],
+                password=self.SECRET,
+            )
+            peer = BGPPeer.objects.create(
+                bgprouter=self.router,
+                remote_address=self.addresses4[1],
+                remote_as=self.asns[0],
+                password=self.SECRET,
+            )
+
+        for label, instance in (('BGPPeergroup', peergroup), ('BGPPeer', peer)):
+            with self.subTest(model=label):
+                change = ObjectChange.objects.get(
+                    changed_object_type=ContentType.objects.get_for_model(instance),
+                    changed_object_id=instance.pk,
+                )
+                self.assertEqual(change.action, ObjectChangeActionChoices.ACTION_CREATE)
+                self.assertNoSecret(change.postchange_data, f'{label} saved ObjectChange')
+                # The row is a real, useful change record — just without the key.
+                self.assertEqual(change.postchange_data['bgprouter'], self.router.pk)
+
+        # And the key really is in the database, so the assertions above are not passing
+        # because nothing was stored in the first place.
+        peer.refresh_from_db()
+        self.assertEqual(peer.password, self.SECRET)
+
+
+class ConstraintNamingTestCase(TestCase):
+    """
+    PostgreSQL truncates identifiers at 63 bytes *silently*. A longer constraint name is
+    therefore stored under a different name than the one Django holds in its migration
+    state, and the two only disagree once something tries to drop or alter it.
+    """
+
+    MAX_IDENTIFIER_LENGTH = 63
+
+    def test_every_constraint_name_fits_postgresql(self):
+        for model in apps.get_app_config('netbox_routing_protocols').get_models():
+            for constraint in model._meta.constraints:
+                with self.subTest(model=model.__name__, constraint=constraint.name):
+                    self.assertLessEqual(
+                        len(constraint.name),
+                        self.MAX_IDENTIFIER_LENGTH,
+                        f'{constraint.name} is {len(constraint.name)} characters',
+                    )
+
+    def test_every_index_name_fits_postgresql(self):
+        for model in apps.get_app_config('netbox_routing_protocols').get_models():
+            for index in model._meta.indexes:
+                with self.subTest(model=model.__name__, index=index.name):
+                    self.assertLessEqual(len(index.name), self.MAX_IDENTIFIER_LENGTH)
+
+    def test_constraint_names_are_unique_across_the_plugin(self):
+        """Constraint names share one namespace per database, not one per table."""
+        names = [
+            constraint.name
+            for model in apps.get_app_config('netbox_routing_protocols').get_models()
+            for constraint in model._meta.constraints
+        ]
+        self.assertEqual(len(names), len(set(names)), 'duplicate constraint names')
 
 
 class PrefixDeletionTestCase(BaseTestData, TestCase):

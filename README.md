@@ -53,11 +53,10 @@ PLUGINS = [
 ]
 ```
 
-Run the migrations and collect static files:
+Run the migrations:
 
 ```bash
 python manage.py migrate
-python manage.py collectstatic --no-input
 ```
 
 Add the package to `local_requirements.txt` so it survives a NetBox upgrade:
@@ -98,9 +97,21 @@ curl -H "Authorization: Token $NETBOX_TOKEN" \
 
 ### A note on BGP passwords
 
-`BGPPeer.password` and `BGPPeergroup.password` hold BGP MD5 authentication keys. They are
-**write-only** over the REST API — they can be set and updated, but are never returned in a
-response. Treat the database as holding secrets and restrict object permissions accordingly.
+`BGPPeer.password` and `BGPPeergroup.password` hold BGP MD5 authentication keys. The plugin
+keeps them out of every read path it controls:
+
+- **REST API** — the field is write-only. It can be set and updated, but is not serialised into
+  any response, including nested and `?brief=true` representations.
+- **GraphQL** — the field is excluded from both object types.
+- **Change log** — the field is stripped from `prechange_data` and `postchange_data`, so it is
+  not readable through the changelog tab, `/api/core/object-changes/`, GraphQL `changelog`, or
+  webhook payloads.
+- **UI** — the edit form never renders the stored key back into the page. Leave the field blank
+  to keep the current key; tick **Clear Password** to remove one.
+
+The key is still stored in plaintext in the database, and is still readable by anything with
+direct database or Django shell access. Treat the database as holding secrets, back it up
+accordingly, and restrict object permissions to match.
 
 ## Contributing
 

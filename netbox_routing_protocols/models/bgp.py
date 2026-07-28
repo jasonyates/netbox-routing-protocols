@@ -150,7 +150,8 @@ class BGPPeerAttributes(PrimaryModel):
         help_text='Use Bidirectional Forwarding Detection for this session.',
     )
 
-    # Sensitive: exposed write-only over the REST API. See the serializers.
+    # Sensitive: write-only over the REST API, excluded from the GraphQL type, and
+    # stripped from every change log snapshot by serialize_object() below.
     password = models.CharField(
         max_length=255,
         blank=True,
@@ -181,6 +182,25 @@ class BGPPeerAttributes(PrimaryModel):
     @property
     def vrf(self):
         return self.bgprouter.vrf
+
+    def serialize_object(self, exclude=None):
+        """
+        Serialize for the change log with the MD5 key removed.
+
+        NetBox serializes every concrete field of a model into
+        ``ObjectChange.prechange_data``/``postchange_data`` (and into webhook
+        payloads, via ``extras.events``). Write-only REST serializers and a
+        GraphQL exclusion do nothing about that path, so without this override
+        the plaintext key would be readable by anyone holding
+        ``core.view_objectchange`` — through the changelog tab, the
+        ``/api/core/object-changes/`` endpoint and the GraphQL ``changelog``
+        field alike.
+
+        Excluding the field entirely, rather than masking it, keeps the key out
+        of the diff as well: a masked value would still reveal *when* the key
+        changed, and a constant mask would produce misleading "no change" diffs.
+        """
+        return super().serialize_object(exclude={*(exclude or ()), 'password'})
 
     def clean(self):
         super().clean()
@@ -282,7 +302,12 @@ class BGPPeer(BGPPeerAttributes):
     def name(self) -> str:
         if self.interface_id:
             return self.interface.name
-        return str(self.remote_address.address)
+        # Guarded rather than assumed: a saved row always has one or the other under
+        # the CheckConstraint, but the property is reached from unsaved instances
+        # during form and serializer validation, before either has been set.
+        if self.remote_address_id:
+            return str(self.remote_address.address)
+        return ''
 
     def clean(self):
         super().clean()
@@ -445,9 +470,13 @@ class BGPAddressFamilyRedistribute(PrimaryModel):
         verbose_name = 'BGP Redistribution'
         verbose_name_plural = 'BGP Redistributions'
         constraints = (
+            # Spelled out rather than interpolated from %(class)s: PostgreSQL truncates
+            # identifiers at 63 characters, and
+            # "netbox_routing_protocols_bgpaddressfamilyredistribute_unique_protocol" is 69,
+            # which would leave Django's migration state disagreeing with the database.
             UniqueConstraint(
                 fields=('family', 'protocol'),
-                name='%(app_label)s_%(class)s_unique_protocol',
+                name='netbox_routing_protocols_bgp_redistribute_unique_protocol',
                 violation_error_message='This protocol is already redistributed into this address family.',
             ),
         )
@@ -588,9 +617,12 @@ class BGPPeergroupAddressFamily(BGPSessionAddressFamilyAttributes):
         verbose_name = 'BGP Peer Group Address Family'
         verbose_name_plural = 'BGP Peer Group Address Families'
         constraints = (
+            # Spelled out for the same reason as the redistribution constraint above:
+            # "netbox_routing_protocols_bgppeergroupaddressfamily_unique_family" is 64
+            # characters, one over PostgreSQL's identifier limit.
             UniqueConstraint(
                 fields=('peergroup', 'family'),
-                name='%(app_label)s_%(class)s_unique_family',
+                name='netbox_routing_protocols_bgp_peergroup_af_unique_family',
                 violation_error_message='This address family is already configured on this peer group.',
             ),
         )

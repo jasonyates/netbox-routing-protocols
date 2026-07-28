@@ -49,8 +49,8 @@ version = { attr = "netbox_routing_protocols.version.__version__" }
 [tool.setuptools.packages.find]
 include = ["netbox_routing_protocols*"]
 
-[tool.setuptools.package-data]
-netbox_routing_protocols = ["templates/**/*", "static/**/*"]
+# No package-data is declared: the plugin ships no templates and no static files. Every detail
+# page is built from a declarative layout, so there is nothing for collectstatic to pick up.
 
 [tool.ruff]
 line-length = 120

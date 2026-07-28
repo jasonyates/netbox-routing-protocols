@@ -23,6 +23,9 @@ APP_LABEL = 'netbox_routing_protocols'
 
 # Maps each model's URL prefix to its model name. The model name is what get_model_urls() looks up, so the two can
 # never drift apart the way a hand-written path table can.
+#
+# The prefixes deliberately match the REST API's routes in api/urls.py, hyphen for hyphen, so that a UI path and its
+# API counterpart differ only by the /api/plugins/routing-protocols prefix.
 MODEL_URL_PREFIXES = {
     'static-routes': 'staticroute',
     'prefix-lists': 'prefixlist',
@@ -30,12 +33,12 @@ MODEL_URL_PREFIXES = {
     'route-maps': 'routemap',
     'route-map-rules': 'routemaprule',
     'bgp-routers': 'bgprouter',
-    'bgp-peergroups': 'bgppeergroup',
+    'bgp-peer-groups': 'bgppeergroup',
     'bgp-peers': 'bgppeer',
     'bgp-address-families': 'bgpaddressfamily',
     'bgp-redistributions': 'bgpaddressfamilyredistribute',
     'bgp-peer-address-families': 'bgppeeraddressfamily',
-    'bgp-peergroup-address-families': 'bgppeergroupaddressfamily',
+    'bgp-peer-group-address-families': 'bgppeergroupaddressfamily',
 }
 
 urlpatterns = []

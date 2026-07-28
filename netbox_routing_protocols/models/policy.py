@@ -146,11 +146,13 @@ class PrefixListRule(PrimaryModel):
                     }
                 )
 
+        # Equality is legal, and idiomatic: "ge 24 le 24" is how every mainstream
+        # platform spells "exactly a /24". Only an inverted range is an error.
         if self.min_prefix_length and self.max_prefix_length:
-            if self.min_prefix_length >= self.max_prefix_length:
+            if self.min_prefix_length > self.max_prefix_length:
                 raise ValidationError(
                     {
-                        'max_prefix_length': ('Maximum prefix length must be greater than minimum prefix length.'),
+                        'max_prefix_length': ('Maximum prefix length cannot be less than the minimum prefix length.'),
                     }
                 )
 

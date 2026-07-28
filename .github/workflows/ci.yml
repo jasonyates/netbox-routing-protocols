@@ -3,8 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
@@ -93,3 +97,56 @@ jobs:
       - name: Run tests
         working-directory: netbox/netbox
         run: python manage.py test netbox_routing_protocols --no-input -v 2
+
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    # Only a version tag can produce something publishable, and only once lint and the
+    # full matrix are green.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install build twine
+      - run: python -m build
+      # Catches a malformed README or missing metadata before anything reaches PyPI,
+      # where a filename can never be reused.
+      - run: twine check --strict dist/*
+      - name: Verify the tag matches the packaged version
+        # The ref name is read from the environment rather than interpolated into the
+        # script, so a branch or tag named to look like shell syntax stays inert data.
+        # version.py is parsed rather than imported: importing the package pulls in
+        # netbox, which is not installed here.
+        env:
+          GIT_REF_NAME: ${{ github.ref_name }}
+        run: |
+          PACKAGE_VERSION=$(python -c "import pathlib, re; print(re.search(r'''__version__ = ['\"]([^'\"]+)''', pathlib.Path('netbox_routing_protocols/version.py').read_text()).group(1))")
+          echo "Tag: ${GIT_REF_NAME}  Package version: ${PACKAGE_VERSION}"
+          test "${GIT_REF_NAME}" = "v${PACKAGE_VERSION}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [build]
+    # Trusted publishing: PyPI mints a short-lived credential from this job's OIDC
+    # identity, so there is no long-lived API token stored in the repository. The
+    # environment gives the token a name to be scoped to on the PyPI side.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/netbox-routing-protocols
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
