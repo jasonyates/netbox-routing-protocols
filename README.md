@@ -137,6 +137,21 @@ treat database backups and webhook destinations as carrying secrets.
 Issues and pull requests are welcome at
 <https://github.com/jasonyates/netbox-routing-protocols>.
 
+### Generating migrations
+
+Generate migrations against the **oldest** supported NetBox release (`min_version` in
+`__init__.py`), not whichever one you happen to have installed. `makemigrations` records a
+dependency on the newest migration of every app it references, so a migration generated
+against a later patch release will fail on earlier ones with:
+
+```
+NodeNotFoundError: Migration netbox_routing_protocols.0001_initial dependencies
+reference nonexistent parent node ('dcim', '0237_...')
+```
+
+CI runs the test matrix against both ends of the supported range, so this is caught before
+release rather than by users.
+
 ## Licence
 
 Apache-2.0. See [LICENSE](LICENSE).
