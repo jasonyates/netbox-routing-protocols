@@ -354,7 +354,7 @@ class BGPRouterTestCase(RoutingProtocolsViewTestCases.PrimaryObjectViewTestCase)
             'vrf': cls.vrfs[0].pk,
             'asn': cls.asns[1].pk,
             'enable': True,
-            'aspath_ignore': True,
+            'multipath_relax': True,
             'route_reflection': True,
             'enable_evpn': False,
             'description': 'Created via the UI',

@@ -90,7 +90,7 @@ class BGPRouterPanel(panels.ObjectAttributesPanel):
     enable = attrs.BooleanAttr('enable', label=_('Enabled'))
     asn = attrs.RelatedObjectAttr('asn', label=_('ASN'), linkify=True)
     router_id = attrs.RelatedObjectAttr('router_id', label=_('Router ID'), linkify=True)
-    aspath_ignore = attrs.BooleanAttr('aspath_ignore', label=_('AS Path Ignore'))
+    multipath_relax = attrs.BooleanAttr('multipath_relax', label=_('Multipath Relax'))
     route_reflection = attrs.BooleanAttr('route_reflection', label=_('Route Reflection'))
     enable_evpn = attrs.BooleanAttr('enable_evpn', label=_('Enable EVPN'))
     description = attrs.TextAttr('description', label=_('Description'))

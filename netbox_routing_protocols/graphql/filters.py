@@ -168,7 +168,7 @@ class BGPRouterFilter(PrimaryModelFilter):
     router_id: Annotated['IPAddressFilter', strawberry.lazy('ipam.graphql.filters')] | None = (
         strawberry_django.filter_field()
     )
-    aspath_ignore: FilterLookup[bool] | None = strawberry_django.filter_field()
+    multipath_relax: FilterLookup[bool] | None = strawberry_django.filter_field()
     route_reflection: FilterLookup[bool] | None = strawberry_django.filter_field()
     enable_evpn: FilterLookup[bool] | None = strawberry_django.filter_field()
 

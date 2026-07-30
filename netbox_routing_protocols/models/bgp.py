@@ -63,10 +63,12 @@ class BGPRouter(PrimaryModel):
         verbose_name='Router ID',
     )
 
-    aspath_ignore = models.BooleanField(
+    # Renamed from aspath_ignore, which described the wrong feature: the field was
+    # inherited from an NVUE estate, where "aspath-ignore" spells multipath-relax.
+    multipath_relax = models.BooleanField(
         default=True,
-        verbose_name='AS Path Ignore',
-        help_text='Ignore AS path length when selecting a best path.',
+        verbose_name='Multipath Relax',
+        help_text=('Allow ECMP across eBGP paths from different neighbouring ASNs (bestpath as-path multipath-relax).'),
     )
 
     route_reflection = models.BooleanField(

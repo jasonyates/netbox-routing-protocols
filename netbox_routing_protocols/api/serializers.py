@@ -238,7 +238,7 @@ class BGPRouterSerializer(PrimaryModelSerializer):
             'enable',
             'asn',
             'router_id',
-            'aspath_ignore',
+            'multipath_relax',
             'route_reflection',
             'enable_evpn',
             *PRIMARY_MODEL_FIELDS,

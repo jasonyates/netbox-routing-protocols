@@ -83,7 +83,7 @@ class BGPRouterFilterSet(PrimaryModelFilterSet):
         fields = (
             'id',
             'enable',
-            'aspath_ignore',
+            'multipath_relax',
             'route_reflection',
             'enable_evpn',
             'description',
