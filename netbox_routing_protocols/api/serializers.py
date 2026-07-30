@@ -117,7 +117,7 @@ class StaticRouteSerializer(PrimaryModelSerializer):
 
 class PrefixListSerializer(PrimaryModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name=_detail_view_name('prefixlist'))
-    device = DeviceSerializer(nested=True)
+    device = DeviceSerializer(nested=True, required=False, allow_null=True, default=None)
     address_family = ChoiceField(choices=AddressFamilyChoices)
     # Populated by an annotation on the viewset's queryset. A nested instance has no
     # such attribute, hence the default; and it is kept out of brief_fields so that
@@ -169,7 +169,7 @@ class PrefixListRuleSerializer(PrimaryModelSerializer):
 
 class RouteMapSerializer(PrimaryModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name=_detail_view_name('routemap'))
-    device = DeviceSerializer(nested=True)
+    device = DeviceSerializer(nested=True, required=False, allow_null=True, default=None)
     # See PrefixListSerializer.rule_count.
     rule_count = serializers.IntegerField(read_only=True, default=None)
 

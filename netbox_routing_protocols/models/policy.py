@@ -18,14 +18,22 @@ MAX_PREFIX_LENGTH = {
 
 
 class PrefixList(PrimaryModel):
-    """A named, ordered list of prefix match rules applied on a device."""
+    """
+    A named, ordered list of prefix match rules.
+
+    Scoped to a device, or shared: a null device marks a fleet-wide list that any
+    device may reference, so one definition serves every leaf that carries it.
+    """
 
     name = models.CharField(max_length=255)
 
     device = models.ForeignKey(
         to='dcim.Device',
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='%(app_label)s_prefix_lists',
+        help_text='Scope the prefix list to one device, or leave blank to share it fleet-wide.',
     )
 
     address_family = models.IntegerField(
@@ -38,10 +46,19 @@ class PrefixList(PrimaryModel):
         verbose_name = 'Prefix List'
         verbose_name_plural = 'Prefix Lists'
         constraints = (
+            # Only bites when device is populated: SQL treats NULLs as distinct, and
+            # NULLS NOT DISTINCT needs PostgreSQL 15 while NetBox supports 14. The
+            # partial constraint below covers the shared (device IS NULL) rows.
             UniqueConstraint(
                 fields=('device', 'name'),
                 name='%(app_label)s_%(class)s_unique_name',
                 violation_error_message='A prefix list with this name already exists on this device.',
+            ),
+            UniqueConstraint(
+                fields=('name',),
+                condition=Q(device__isnull=True),
+                name='%(app_label)s_%(class)s_unique_shared_name',
+                violation_error_message='A shared prefix list with this name already exists.',
             ),
         )
 
@@ -170,14 +187,22 @@ class PrefixListRule(PrimaryModel):
 
 
 class RouteMap(PrimaryModel):
-    """A named, ordered set of route map rules applied on a device."""
+    """
+    A named, ordered set of route map rules.
+
+    Scoped to a device, or shared: a null device marks a fleet-wide route map that
+    any device may reference.
+    """
 
     name = models.CharField(max_length=255)
 
     device = models.ForeignKey(
         to='dcim.Device',
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='%(app_label)s_route_maps',
+        help_text='Scope the route map to one device, or leave blank to share it fleet-wide.',
     )
 
     class Meta:
@@ -185,10 +210,18 @@ class RouteMap(PrimaryModel):
         verbose_name = 'Route Map'
         verbose_name_plural = 'Route Maps'
         constraints = (
+            # Same pairing as PrefixList: the plain constraint covers device-scoped
+            # rows, the partial one covers shared rows on PostgreSQL 14.
             UniqueConstraint(
                 fields=('device', 'name'),
                 name='%(app_label)s_%(class)s_unique_name',
                 violation_error_message='A route map with this name already exists on this device.',
+            ),
+            UniqueConstraint(
+                fields=('name',),
+                condition=Q(device__isnull=True),
+                name='%(app_label)s_%(class)s_unique_shared_name',
+                violation_error_message='A shared route map with this name already exists.',
             ),
         )
 
@@ -256,7 +289,20 @@ class RouteMapRule(PrimaryModel):
     def clean(self):
         super().clean()
 
-        if self.prefix_list_id and self.route_map_id:
+        if self.prefix_list_id and self.route_map_id and self.prefix_list.device_id:
+            # A shared prefix list (no device) may be referenced from anywhere. A
+            # device-scoped one may only be referenced from a route map on the same
+            # device — and never from a shared route map, which renders on every
+            # device while the list exists on just one.
+            if self.route_map.device_id is None:
+                raise ValidationError(
+                    {
+                        'prefix_list': (
+                            f'Shared route map {self.route_map.name} cannot reference prefix list '
+                            f'{self.prefix_list.name}, which is scoped to a single device.'
+                        ),
+                    }
+                )
             if self.prefix_list.device_id != self.route_map.device_id:
                 raise ValidationError(
                     {

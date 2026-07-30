@@ -14,9 +14,9 @@ so that config generation, compliance checks and automation can read it back out
 - A Static Routes tab on the IPAM Prefix view
 
 **Routing policy**
-- Prefix lists with ordered, sequenced rules
+- Prefix lists with ordered, sequenced rules, scoped to a device or shared fleet-wide
 - Prefix list rules matching a prefix, any prefix, or the default route, with `ge`/`le` length bounds
-- Route maps with ordered rules matching against prefix lists
+- Route maps with ordered rules matching against prefix lists, scoped to a device or shared fleet-wide
 - Optional automatic terminating `deny 9999` rule on new prefix lists and route maps
 
 **BGP**
