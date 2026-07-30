@@ -51,8 +51,8 @@ class BGPRouterTable(NetBoxTable):
     enable = columns.BooleanColumn(
         verbose_name=_('Enabled'),
     )
-    aspath_ignore = columns.BooleanColumn(
-        verbose_name=_('AS Path Ignore'),
+    multipath_relax = columns.BooleanColumn(
+        verbose_name=_('Multipath Relax'),
     )
     route_reflection = columns.BooleanColumn(
         verbose_name=_('Route Reflection'),
@@ -78,7 +78,7 @@ class BGPRouterTable(NetBoxTable):
             'enable',
             'asn',
             'router_id',
-            'aspath_ignore',
+            'multipath_relax',
             'route_reflection',
             'enable_evpn',
             'description',

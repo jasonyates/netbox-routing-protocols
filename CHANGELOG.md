@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- `BGPRouter.aspath_ignore` renamed to `multipath_relax` ([#5]). The field was inherited
+  from an NVUE estate where `aspath-ignore` spells multipath-relax, and the old name and
+  help text described a different feature (`bgp bestpath as-path ignore`). Config
+  generation consuming this field should now render
+  `bgp bestpath as-path multipath-relax` (or the platform equivalent). The default
+  remains `True`. API and CSV field names change accordingly.
+
+[#5]: https://github.com/jasonyates/netbox-routing-protocols/issues/5
+
 ## [1.0.0] — 2026-07-29
 
 First public release. The plugin has been rebuilt against NetBox 4.6 and a number of

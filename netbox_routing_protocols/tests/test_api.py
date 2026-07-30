@@ -399,7 +399,7 @@ class BGPRouterTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
             {
                 'device': cls.devices[1].pk,
                 'vrf': cls.vrfs[2].pk,
-                'aspath_ignore': False,
+                'multipath_relax': False,
             },
         ]
 

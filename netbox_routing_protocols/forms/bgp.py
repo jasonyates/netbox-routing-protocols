@@ -174,7 +174,7 @@ class BGPRouterForm(NetBoxModelForm):
     fieldsets = (
         FieldSet('device', 'vrf', 'enable', name=_('BGP Router')),
         FieldSet('asn', 'router_id', name=_('Identity')),
-        FieldSet('aspath_ignore', 'route_reflection', 'enable_evpn', name=_('Behaviour')),
+        FieldSet('multipath_relax', 'route_reflection', 'enable_evpn', name=_('Behaviour')),
         FieldSet('description', 'tags', name=_('Attributes')),
     )
 
@@ -186,7 +186,7 @@ class BGPRouterForm(NetBoxModelForm):
             'enable',
             'asn',
             'router_id',
-            'aspath_ignore',
+            'multipath_relax',
             'route_reflection',
             'enable_evpn',
             'description',
@@ -223,8 +223,8 @@ class BGPRouterFilterForm(PrimaryModelFilterSetForm):
         required=False,
         widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES),
     )
-    aspath_ignore = forms.NullBooleanField(
-        label=_('AS Path Ignore'),
+    multipath_relax = forms.NullBooleanField(
+        label=_('Multipath Relax'),
         required=False,
         widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES),
     )
@@ -244,7 +244,7 @@ class BGPRouterFilterForm(PrimaryModelFilterSetForm):
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('device_id', 'vrf_id', 'enable', name=_('BGP Router')),
         FieldSet('asn_id', 'router_id_id', name=_('Identity')),
-        FieldSet('aspath_ignore', 'route_reflection', 'enable_evpn', name=_('Behaviour')),
+        FieldSet('multipath_relax', 'route_reflection', 'enable_evpn', name=_('Behaviour')),
         FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
@@ -267,8 +267,8 @@ class BGPRouterBulkEditForm(NetBoxModelBulkEditForm):
         required=False,
         widget=BulkEditNullBooleanSelect(),
     )
-    aspath_ignore = forms.NullBooleanField(
-        label=_('AS Path Ignore'),
+    multipath_relax = forms.NullBooleanField(
+        label=_('Multipath Relax'),
         required=False,
         widget=BulkEditNullBooleanSelect(),
     )
@@ -291,7 +291,7 @@ class BGPRouterBulkEditForm(NetBoxModelBulkEditForm):
 
     fieldsets = (
         FieldSet('vrf', 'asn', 'enable', name=_('BGP Router')),
-        FieldSet('aspath_ignore', 'route_reflection', 'enable_evpn', 'description', name=_('Behaviour')),
+        FieldSet('multipath_relax', 'route_reflection', 'enable_evpn', 'description', name=_('Behaviour')),
     )
     nullable_fields = ('asn', 'description', 'comments')
 
@@ -327,7 +327,7 @@ class BGPRouterImportForm(NetBoxModelImportForm):
     fieldsets = (
         FieldSet('id', 'device', 'vrf', 'enable', name=_('BGP Router')),
         FieldSet('asn', 'router_id', name=_('Identity')),
-        FieldSet('aspath_ignore', 'route_reflection', 'enable_evpn', name=_('Behaviour')),
+        FieldSet('multipath_relax', 'route_reflection', 'enable_evpn', name=_('Behaviour')),
         FieldSet('description', 'comments', 'tags', name=_('Attributes')),
     )
 
@@ -339,7 +339,7 @@ class BGPRouterImportForm(NetBoxModelImportForm):
             'enable',
             'asn',
             'router_id',
-            'aspath_ignore',
+            'multipath_relax',
             'route_reflection',
             'enable_evpn',
             'description',
