@@ -1,4 +1,6 @@
 {
+  "bfdprofile:api_list_objects": 13,
+  "bfdprofile:list_objects_with_permission": 21,
   "bgpaddressfamily:api_list_objects": 15,
   "bgpaddressfamily:list_objects_with_permission": 23,
   "bgpaddressfamilyredistribute:api_list_objects": 13,
