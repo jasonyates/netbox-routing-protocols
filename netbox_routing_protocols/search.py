@@ -19,6 +19,9 @@ from netbox_routing_protocols.models import (
     BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
+    BGPCommunity,
+    BGPCommunityList,
+    BGPCommunityListRule,
     BGPPeer,
     BGPPeerAddressFamily,
     BGPPeergroup,
@@ -35,6 +38,9 @@ __all__ = (
     'BFDProfileIndex',
     'BGPAddressFamilyIndex',
     'BGPAddressFamilyRedistributeIndex',
+    'BGPCommunityIndex',
+    'BGPCommunityListIndex',
+    'BGPCommunityListRuleIndex',
     'BGPPeerAddressFamilyIndex',
     'BGPPeerIndex',
     'BGPPeergroupAddressFamilyIndex',
@@ -116,6 +122,39 @@ class RouteMapRuleIndex(SearchIndex):
         ('comments', 5000),
     )
     display_attrs = ('route_map', 'sequence', 'action', 'prefix_list', 'description')
+
+
+class BGPCommunityIndex(SearchIndex):
+    model = BGPCommunity
+    fields = (
+        ('value', 100),
+        ('name', 110),
+        ('description', 500),
+        ('comments', 5000),
+    )
+    display_attrs = ('type', 'name', 'description')
+
+
+class BGPCommunityListIndex(SearchIndex):
+    model = BGPCommunityList
+    fields = (
+        ('name', 100),
+        ('description', 500),
+        ('comments', 5000),
+    )
+    display_attrs = ('device', 'description')
+
+
+class BGPCommunityListRuleIndex(SearchIndex):
+    # BGPCommunityListRule.name is "<community list> <sequence>"; sequence is the
+    # only part of that which is a real column.
+    model = BGPCommunityListRule
+    fields = (
+        ('sequence', 110),
+        ('description', 500),
+        ('comments', 5000),
+    )
+    display_attrs = ('community_list', 'action', 'community', 'description')
 
 
 class BGPRouterIndex(SearchIndex):
@@ -201,6 +240,9 @@ class BGPPeergroupAddressFamilyIndex(SearchIndex):
 indexes = [
     StaticRouteIndex,
     BFDProfileIndex,
+    BGPCommunityIndex,
+    BGPCommunityListIndex,
+    BGPCommunityListRuleIndex,
     PrefixListIndex,
     PrefixListRuleIndex,
     RouteMapIndex,

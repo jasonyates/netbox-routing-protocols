@@ -21,12 +21,16 @@ from netbox_routing_protocols.choices import (
     ActionChoices,
     AddressFamilyChoices,
     BGPAddressFamilyChoices,
+    BGPCommunityTypeChoices,
     BGPRedistributeProtocolChoices,
 )
 from netbox_routing_protocols.filtersets import (
     BFDProfileFilterSet,
     BGPAddressFamilyFilterSet,
     BGPAddressFamilyRedistributeFilterSet,
+    BGPCommunityFilterSet,
+    BGPCommunityListFilterSet,
+    BGPCommunityListRuleFilterSet,
     BGPPeerAddressFamilyFilterSet,
     BGPPeerFilterSet,
     BGPPeergroupAddressFamilyFilterSet,
@@ -42,6 +46,9 @@ from netbox_routing_protocols.models import (
     BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
+    BGPCommunity,
+    BGPCommunityList,
+    BGPCommunityListRule,
     BGPPeer,
     BGPPeerAddressFamily,
     BGPPeergroup,
@@ -220,6 +227,37 @@ class FilterSetTestData(BaseTestData):
             BFDProfile.objects.create(name='BFD-FAST', min_tx=100, min_rx=100),
             BFDProfile.objects.create(name='BFD-SLOW', device=cls.devices[0], min_tx=1000, min_rx=1000),
             BFDProfile.objects.create(name='BFD-ECHO', echo_mode=True),
+        ]
+
+        cls.communities = [
+            BGPCommunity.objects.create(value='65001:100', name='CUSTOMERS'),
+            BGPCommunity.objects.create(value='rt:65001:200', type=BGPCommunityTypeChoices.TYPE_EXTENDED),
+            BGPCommunity.objects.create(value='65001:1:1', type=BGPCommunityTypeChoices.TYPE_LARGE),
+        ]
+        cls.community_lists = [
+            BGPCommunityList.objects.create(name='CL-CORE', device=cls.devices[0]),
+            BGPCommunityList.objects.create(name='CL-EDGE', device=cls.devices[1]),
+            BGPCommunityList.objects.create(name='CL-SHARED'),
+        ]
+        cls.community_list_rules = [
+            BGPCommunityListRule.objects.create(
+                community_list=cls.community_lists[0],
+                sequence=10,
+                action=ActionChoices.ACTION_PERMIT,
+                community=cls.communities[0],
+            ),
+            BGPCommunityListRule.objects.create(
+                community_list=cls.community_lists[0],
+                sequence=20,
+                action=ActionChoices.ACTION_DENY,
+                community=cls.communities[1],
+            ),
+            BGPCommunityListRule.objects.create(
+                community_list=cls.community_lists[2],
+                sequence=10,
+                action=ActionChoices.ACTION_PERMIT,
+                community=cls.communities[0],
+            ),
         ]
 
         cls.peergroups = [
@@ -531,6 +569,82 @@ class RouteMapRuleFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, Chan
 #
 # BGP
 #
+
+
+class BGPCommunityFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):
+    queryset = BGPCommunity.objects.all()
+    filterset = BGPCommunityFilterSet
+
+    def test_value(self):
+        params = {'value': ['65001:100']}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_type(self):
+        params = {'type': [BGPCommunityTypeChoices.TYPE_EXTENDED]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_name(self):
+        params = {'name': ['CUSTOMERS']}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_search_matches_value_and_name(self):
+        self.assertEqual(self.filterset({'q': 'rt:65001'}, self.queryset).qs.count(), 1)
+        self.assertEqual(self.filterset({'q': 'CUSTOMERS'}, self.queryset).qs.count(), 1)
+
+
+class BGPCommunityListFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):
+    queryset = BGPCommunityList.objects.all()
+    filterset = BGPCommunityListFilterSet
+
+    def test_name(self):
+        params = {'name': ['CL-CORE']}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_device(self):
+        params = {'device_id': [self.devices[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_available_on_device(self):
+        # The device's own list plus the shared one.
+        params = {'available_on_device': [self.devices[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
+
+    def test_shared(self):
+        self.assertEqual(self.filterset({'shared': True}, self.queryset).qs.count(), 1)
+        self.assertEqual(self.filterset({'shared': False}, self.queryset).qs.count(), 2)
+
+    def test_search_matches_name(self):
+        self.assertEqual(self.filterset({'q': 'CL-EDGE'}, self.queryset).qs.count(), 1)
+
+
+class BGPCommunityListRuleFilterSetTestCase(
+    FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase
+):
+    queryset = BGPCommunityListRule.objects.all()
+    filterset = BGPCommunityListRuleFilterSet
+
+    def test_community_list(self):
+        params = {'community_list_id': [self.community_lists[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
+        params = {'community_list': [self.community_lists[2].name]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_device(self):
+        params = {'device_id': [self.devices[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
+
+    def test_community(self):
+        params = {'community_id': [self.communities[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
+        params = {'community': [self.communities[1].value]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_action(self):
+        params = {'action': [ActionChoices.ACTION_DENY]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_search_matches_list_and_community(self):
+        self.assertEqual(self.filterset({'q': 'CL-CORE'}, self.queryset).qs.count(), 2)
 
 
 class BGPRouterFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):

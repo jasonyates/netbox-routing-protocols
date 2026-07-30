@@ -16,6 +16,9 @@ from .types import (
     BFDProfileType,
     BGPAddressFamilyRedistributeType,
     BGPAddressFamilyType,
+    BGPCommunityListRuleType,
+    BGPCommunityListType,
+    BGPCommunityType,
     BGPPeerAddressFamilyType,
     BGPPeergroupAddressFamilyType,
     BGPPeergroupType,
@@ -71,3 +74,14 @@ class Query:
 
     bgp_peergroup_address_family: BGPPeergroupAddressFamilyType = strawberry_django.field()
     bgp_peergroup_address_family_list: list[BGPPeergroupAddressFamilyType] = strawberry_django.field()
+
+    bgp_community: BGPCommunityType = strawberry_django.field()
+    bgp_community_list: list[BGPCommunityType] = strawberry_django.field()
+
+    # BGPCommunityList cannot be `bgp_community_list` — that is already the list
+    # field for BGPCommunity — so it follows the `ip_prefix_list` precedent above.
+    community_list: BGPCommunityListType = strawberry_django.field()
+    community_list_list: list[BGPCommunityListType] = strawberry_django.field()
+
+    bgp_community_list_rule: BGPCommunityListRuleType = strawberry_django.field()
+    bgp_community_list_rule_list: list[BGPCommunityListRuleType] = strawberry_django.field()

@@ -56,6 +56,8 @@ menu = PluginMenu(
                 _menu_item('bgppeer', _('Peers')),
                 _menu_item('bgppeergroup', _('Peer Groups')),
                 _menu_item('bgpaddressfamily', _('Address Families')),
+                _menu_item('bgpcommunity', _('Communities')),
+                _menu_item('bgpcommunitylist', _('Community Lists')),
                 _menu_item('bgpaddressfamilyredistribute', _('Redistributions')),
             ),
         ),

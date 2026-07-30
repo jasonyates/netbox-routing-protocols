@@ -42,6 +42,20 @@ class BGPAddressFamilyChoices(ChoiceSet):
     ]
 
 
+class BGPCommunityTypeChoices(ChoiceSet):
+    """BGP community formats."""
+
+    TYPE_STANDARD = 'standard'
+    TYPE_EXTENDED = 'extended'
+    TYPE_LARGE = 'large'
+
+    CHOICES = [
+        (TYPE_STANDARD, 'Standard', 'blue'),
+        (TYPE_EXTENDED, 'Extended', 'purple'),
+        (TYPE_LARGE, 'Large', 'orange'),
+    ]
+
+
 class BGPRedistributeProtocolChoices(ChoiceSet):
     """Source protocols that may be redistributed into a BGP address family."""
 

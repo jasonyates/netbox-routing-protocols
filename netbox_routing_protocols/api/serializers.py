@@ -29,12 +29,16 @@ from netbox_routing_protocols.choices import (
     ActionChoices,
     AddressFamilyChoices,
     BGPAddressFamilyChoices,
+    BGPCommunityTypeChoices,
     BGPRedistributeProtocolChoices,
 )
 from netbox_routing_protocols.models import (
     BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
+    BGPCommunity,
+    BGPCommunityList,
+    BGPCommunityListRule,
     BGPPeer,
     BGPPeerAddressFamily,
     BGPPeergroup,
@@ -51,6 +55,9 @@ __all__ = (
     'BFDProfileSerializer',
     'BGPAddressFamilyRedistributeSerializer',
     'BGPAddressFamilySerializer',
+    'BGPCommunityListRuleSerializer',
+    'BGPCommunityListSerializer',
+    'BGPCommunitySerializer',
     'BGPPeerAddressFamilySerializer',
     'BGPPeerSerializer',
     'BGPPeergroupAddressFamilySerializer',
@@ -209,6 +216,73 @@ class RouteMapRuleSerializer(PrimaryModelSerializer):
             'action',
             'prefix_list',
             'match_any',
+            *PRIMARY_MODEL_FIELDS,
+        )
+        brief_fields = ('id', 'url', 'display', 'name')
+
+
+#
+# BGP communities
+#
+
+
+class BGPCommunitySerializer(PrimaryModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name=_detail_view_name('bgpcommunity'))
+    type = ChoiceField(choices=BGPCommunityTypeChoices, default=BGPCommunityTypeChoices.TYPE_STANDARD)
+
+    class Meta:
+        model = BGPCommunity
+        fields = (
+            'id',
+            'url',
+            'display',
+            'value',
+            'type',
+            'name',
+            *PRIMARY_MODEL_FIELDS,
+        )
+        brief_fields = ('id', 'url', 'display', 'value', 'name')
+
+
+class BGPCommunityListSerializer(PrimaryModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name=_detail_view_name('bgpcommunitylist'))
+    device = DeviceSerializer(nested=True, required=False, allow_null=True, default=None)
+    # Populated by an annotation on the viewset's queryset; see PrefixListSerializer.
+    rule_count = serializers.IntegerField(read_only=True, default=None)
+
+    class Meta:
+        model = BGPCommunityList
+        fields = (
+            'id',
+            'url',
+            'display',
+            'name',
+            'device',
+            *PRIMARY_MODEL_FIELDS,
+            'rule_count',
+        )
+        brief_fields = ('id', 'url', 'display', 'name')
+
+
+class BGPCommunityListRuleSerializer(PrimaryModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name=_detail_view_name('bgpcommunitylistrule'))
+    # Model property, not a column.
+    name = serializers.CharField(read_only=True)
+    community_list = BGPCommunityListSerializer(nested=True)
+    action = ChoiceField(choices=ActionChoices)
+    community = BGPCommunitySerializer(nested=True)
+
+    class Meta:
+        model = BGPCommunityListRule
+        fields = (
+            'id',
+            'url',
+            'display',
+            'name',
+            'community_list',
+            'sequence',
+            'action',
+            'community',
             *PRIMARY_MODEL_FIELDS,
         )
         brief_fields = ('id', 'url', 'display', 'name')

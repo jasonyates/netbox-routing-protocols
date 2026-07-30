@@ -8,6 +8,11 @@ from .bgp import (
     BGPPeergroupFilterSet,
     BGPRouterFilterSet,
 )
+from .community import (
+    BGPCommunityFilterSet,
+    BGPCommunityListFilterSet,
+    BGPCommunityListRuleFilterSet,
+)
 from .policy import (
     PrefixListFilterSet,
     PrefixListRuleFilterSet,
@@ -20,6 +25,9 @@ __all__ = (
     'BFDProfileFilterSet',
     'BGPAddressFamilyFilterSet',
     'BGPAddressFamilyRedistributeFilterSet',
+    'BGPCommunityFilterSet',
+    'BGPCommunityListFilterSet',
+    'BGPCommunityListRuleFilterSet',
     'BGPPeerAddressFamilyFilterSet',
     'BGPPeerFilterSet',
     'BGPPeergroupAddressFamilyFilterSet',

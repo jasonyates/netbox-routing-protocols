@@ -26,6 +26,7 @@ from netbox_routing_protocols.choices import (
     ActionChoices,
     AddressFamilyChoices,
     BGPAddressFamilyChoices,
+    BGPCommunityTypeChoices,
     BGPRedistributeProtocolChoices,
 )
 
@@ -39,6 +40,10 @@ __all__ = (
     'BGPAddressFamilyEnum',
     'BGPAddressFamilyFilter',
     'BGPAddressFamilyRedistributeFilter',
+    'BGPCommunityFilter',
+    'BGPCommunityListFilter',
+    'BGPCommunityListRuleFilter',
+    'BGPCommunityTypeEnum',
     'BGPPeerAddressFamilyFilter',
     'BGPPeerFilter',
     'BGPPeergroupAddressFamilyFilter',
@@ -68,6 +73,7 @@ PrefixListAddressFamilyEnum = strawberry.enum(
     AddressFamilyChoices.as_enum(name='PrefixListAddressFamilyEnum', prefix='family')
 )
 BGPAddressFamilyEnum = strawberry.enum(BGPAddressFamilyChoices.as_enum(name='BGPAddressFamilyEnum', prefix='family'))
+BGPCommunityTypeEnum = strawberry.enum(BGPCommunityTypeChoices.as_enum(name='BGPCommunityTypeEnum', prefix='type'))
 BGPRedistributeProtocolEnum = strawberry.enum(
     BGPRedistributeProtocolChoices.as_enum(name='BGPRedistributeProtocolEnum', prefix='protocol')
 )
@@ -155,6 +161,36 @@ class RouteMapRuleFilter(PrimaryModelFilter):
 #
 # BGP
 #
+
+
+@strawberry_django.filter_type(models.BGPCommunity, lookups=True)
+class BGPCommunityFilter(PrimaryModelFilter):
+    value: StrFilterLookup | None = strawberry_django.filter_field()
+    type: BaseFilterLookup[BGPCommunityTypeEnum] | None = strawberry_django.filter_field()
+    name: StrFilterLookup | None = strawberry_django.filter_field()
+
+
+@strawberry_django.filter_type(models.BGPCommunityList, lookups=True)
+class BGPCommunityListFilter(PrimaryModelFilter):
+    name: StrFilterLookup | None = strawberry_django.filter_field()
+    device: Annotated['DeviceFilter', strawberry.lazy('dcim.graphql.filters')] | None = strawberry_django.filter_field()
+    device_id: ID | None = strawberry_django.filter_field()
+
+
+@strawberry_django.filter_type(models.BGPCommunityListRule, lookups=True)
+class BGPCommunityListRuleFilter(PrimaryModelFilter):
+    community_list: (
+        Annotated['BGPCommunityListFilter', strawberry.lazy('netbox_routing_protocols.graphql.filters')] | None
+    ) = strawberry_django.filter_field()
+    community_list_id: ID | None = strawberry_django.filter_field()
+    sequence: Annotated['IntegerLookup', strawberry.lazy('netbox.graphql.filter_lookups')] | None = (
+        strawberry_django.filter_field()
+    )
+    action: BaseFilterLookup[PolicyActionEnum] | None = strawberry_django.filter_field()
+    community: Annotated['BGPCommunityFilter', strawberry.lazy('netbox_routing_protocols.graphql.filters')] | None = (
+        strawberry_django.filter_field()
+    )
+    community_id: ID | None = strawberry_django.filter_field()
 
 
 @strawberry_django.filter_type(models.BFDProfile, lookups=True)

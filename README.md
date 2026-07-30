@@ -27,6 +27,7 @@ so that config generation, compliance checks and automation can read it back out
 - Address families (IPv4 unicast, IPv6 unicast, L2VPN EVPN) at router, peer and peer-group level
 - Per-address-family inbound and outbound route-map policy
 - Network statements, aggregates and protocol redistribution
+- Communities (standard, extended and large, with value validation) and sequenced permit/deny community lists
 
 Every model supports the standard NetBox features: tags, custom fields, change logging,
 journaling, export templates, global search, the REST API and the GraphQL API.

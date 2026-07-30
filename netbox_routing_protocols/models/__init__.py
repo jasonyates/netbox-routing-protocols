@@ -8,6 +8,7 @@ from .bgp import (
     BGPPeergroupAddressFamily,
     BGPRouter,
 )
+from .community import BGPCommunity, BGPCommunityList, BGPCommunityListRule
 from .policy import PrefixList, PrefixListRule, RouteMap, RouteMapRule
 from .static import StaticRoute
 
@@ -15,6 +16,9 @@ __all__ = (
     'BFDProfile',
     'BGPAddressFamily',
     'BGPAddressFamilyRedistribute',
+    'BGPCommunity',
+    'BGPCommunityList',
+    'BGPCommunityListRule',
     'BGPPeer',
     'BGPPeerAddressFamily',
     'BGPPeergroup',
