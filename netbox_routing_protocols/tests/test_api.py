@@ -23,12 +23,16 @@ from netbox_routing_protocols.choices import (
     ActionChoices,
     AddressFamilyChoices,
     BGPAddressFamilyChoices,
+    BGPCommunityTypeChoices,
     BGPRedistributeProtocolChoices,
 )
 from netbox_routing_protocols.models import (
     BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
+    BGPCommunity,
+    BGPCommunityList,
+    BGPCommunityListRule,
     BGPPeer,
     BGPPeerAddressFamily,
     BGPPeergroup,
@@ -51,6 +55,7 @@ VIEW_NAMESPACE = 'plugins-api:netbox_routing_protocols'
 # why every endpoint is checked rather than a sample.
 BRIEF_FIELDS = ['display', 'id', 'name', 'url']
 BRIEF_FIELDS_FAMILY = ['display', 'family', 'id', 'url']
+BRIEF_FIELDS_COMMUNITY = ['display', 'id', 'name', 'url', 'value']
 
 # Model names of every endpoint this plugin exposes.
 PLUGIN_MODEL_NAMES = (
@@ -61,6 +66,9 @@ PLUGIN_MODEL_NAMES = (
     'routemap',
     'routemaprule',
     'bgprouter',
+    'bgpcommunity',
+    'bgpcommunitylist',
+    'bgpcommunitylistrule',
     'bgppeergroup',
     'bgppeer',
     'bgpaddressfamily',
@@ -373,6 +381,87 @@ class RouteMapRuleTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
 #
 # BGP
 #
+
+
+class BGPCommunityTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
+    model = BGPCommunity
+    user_permissions = related_view_permissions('bgpcommunity')
+    graphql_base_name = 'bgp_community'
+    brief_fields = BRIEF_FIELDS_COMMUNITY
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+
+        for value in ('65001:100', '65001:200', '65001:300'):
+            BGPCommunity.objects.create(value=value)
+
+        cls.create_data = [
+            {'value': '65002:100', 'name': 'CUSTOMERS'},
+            {'value': 'rt:65002:200', 'type': BGPCommunityTypeChoices.TYPE_EXTENDED},
+            {'value': '65002:1:1', 'type': BGPCommunityTypeChoices.TYPE_LARGE},
+        ]
+
+    def test_malformed_value_is_rejected(self):
+        self.add_permissions('netbox_routing_protocols.add_bgpcommunity')
+        response = self.client.post(
+            self._get_list_url(),
+            {'value': '70000:1', 'type': BGPCommunityTypeChoices.TYPE_STANDARD},
+            format='json',
+            **self.header,
+        )
+        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('value', response.data)
+
+
+class BGPCommunityListTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
+    model = BGPCommunityList
+    user_permissions = related_view_permissions('bgpcommunitylist')
+    graphql_base_name = 'community_list'
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+
+        for name in ('CL-1', 'CL-2', 'CL-3'):
+            BGPCommunityList.objects.create(name=name, device=cls.devices[0])
+
+        cls.create_data = [
+            {'name': 'CL-NEW-1', 'device': cls.devices[1].pk},
+            {'name': 'CL-NEW-2', 'device': cls.devices[1].pk},
+            # No device: a shared, fleet-wide community list.
+            {'name': 'CL-NEW-3'},
+        ]
+
+
+class BGPCommunityListRuleTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
+    model = BGPCommunityListRule
+    user_permissions = related_view_permissions('bgpcommunitylistrule')
+    graphql_base_name = 'bgp_community_list_rule'
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+
+        community_list = BGPCommunityList.objects.create(name='CL-1', device=cls.devices[0])
+        community = BGPCommunity.objects.create(value='65001:100')
+        for sequence in (10, 20, 30):
+            BGPCommunityListRule.objects.create(
+                community_list=community_list,
+                sequence=sequence,
+                action=ActionChoices.ACTION_PERMIT,
+                community=community,
+            )
+
+        cls.create_data = [
+            {
+                'community_list': community_list.pk,
+                'sequence': sequence,
+                'action': ActionChoices.ACTION_PERMIT,
+                'community': community.pk,
+            }
+            for sequence in (40, 50, 60)
+        ]
 
 
 class BFDProfileTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
@@ -737,6 +826,14 @@ class RoutingProtocolsAPIFixture(BaseTestData, APITestCase):
             action=ActionChoices.ACTION_PERMIT,
             prefix_list=cls.prefix_list,
         )
+        cls.community = BGPCommunity.objects.create(value='65001:100')
+        cls.community_list = BGPCommunityList.objects.create(name='CL-CORE', device=cls.devices[0])
+        cls.community_list_rule = BGPCommunityListRule.objects.create(
+            community_list=cls.community_list,
+            sequence=10,
+            action=ActionChoices.ACTION_PERMIT,
+            community=cls.community,
+        )
         cls.bfd_profile = BFDProfile.objects.create(name='default', min_tx=300, min_rx=300)
         cls.bgp_router = BGPRouter.objects.create(device=cls.devices[0], vrf=cls.vrfs[0])
         cls.peergroup = BGPPeergroup.objects.create(
@@ -775,6 +872,9 @@ class RoutingProtocolsAPIFixture(BaseTestData, APITestCase):
         return (
             ('staticroute', self.static_route, BRIEF_FIELDS),
             ('bfdprofile', self.bfd_profile, BRIEF_FIELDS),
+            ('bgpcommunity', self.community, BRIEF_FIELDS_COMMUNITY),
+            ('bgpcommunitylist', self.community_list, BRIEF_FIELDS),
+            ('bgpcommunitylistrule', self.community_list_rule, BRIEF_FIELDS),
             ('prefixlist', self.prefix_list, BRIEF_FIELDS),
             ('prefixlistrule', self.prefix_list_rule, BRIEF_FIELDS),
             ('routemap', self.route_map, BRIEF_FIELDS),

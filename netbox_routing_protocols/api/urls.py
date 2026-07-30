@@ -29,6 +29,9 @@ router.register('bfd-profiles', views.BFDProfileViewSet)
 
 # BGP
 router.register('bgp-routers', views.BGPRouterViewSet)
+router.register('bgp-communities', views.BGPCommunityViewSet)
+router.register('bgp-community-lists', views.BGPCommunityListViewSet)
+router.register('bgp-community-list-rules', views.BGPCommunityListRuleViewSet)
 router.register('bgp-peers', views.BGPPeerViewSet)
 router.register('bgp-peer-groups', views.BGPPeergroupViewSet)
 router.register('bgp-address-families', views.BGPAddressFamilyViewSet)

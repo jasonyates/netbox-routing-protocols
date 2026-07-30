@@ -33,12 +33,16 @@ from netbox_routing_protocols.choices import (
     ActionChoices,
     AddressFamilyChoices,
     BGPAddressFamilyChoices,
+    BGPCommunityTypeChoices,
     BGPRedistributeProtocolChoices,
 )
 from netbox_routing_protocols.models import (
     BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
+    BGPCommunity,
+    BGPCommunityList,
+    BGPCommunityListRule,
     BGPPeer,
     BGPPeerAddressFamily,
     BGPPeergroup,
@@ -813,6 +817,154 @@ class RouteMapRuleTestCase(BaseTestData, TestCase):
         )
         with self.assertRaises(models.ProtectedError), transaction.atomic():
             self.prefix_list.delete()
+
+
+class BGPCommunityTestCase(BaseTestData, TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+
+    def test_str(self):
+        community = BGPCommunity.objects.create(value='65001:100')
+        self.assertEqual(str(community), '65001:100')
+
+        named = BGPCommunity.objects.create(value='65001:200', name='NO-EXPORT-TO-TRANSIT')
+        self.assertEqual(str(named), '65001:200 (NO-EXPORT-TO-TRANSIT)')
+
+    def test_duplicate_value_is_rejected(self):
+        BGPCommunity.objects.create(value='65001:100')
+        duplicate = BGPCommunity(value='65001:100')
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            duplicate.save()
+
+    def test_valid_values_per_type(self):
+        valid = (
+            (BGPCommunityTypeChoices.TYPE_STANDARD, '65001:100'),
+            (BGPCommunityTypeChoices.TYPE_STANDARD, '0:0'),
+            (BGPCommunityTypeChoices.TYPE_STANDARD, '65535:65535'),
+            (BGPCommunityTypeChoices.TYPE_STANDARD, 'no-export'),
+            (BGPCommunityTypeChoices.TYPE_STANDARD, 'no-advertise'),
+            (BGPCommunityTypeChoices.TYPE_STANDARD, 'internet'),
+            (BGPCommunityTypeChoices.TYPE_STANDARD, 'local-AS'),
+            (BGPCommunityTypeChoices.TYPE_EXTENDED, 'rt:65001:100'),
+            (BGPCommunityTypeChoices.TYPE_EXTENDED, 'soo:4200000000:1'),
+            (BGPCommunityTypeChoices.TYPE_LARGE, '65001:100:200'),
+            (BGPCommunityTypeChoices.TYPE_LARGE, '4294967295:4294967295:4294967295'),
+        )
+        for community_type, value in valid:
+            with self.subTest(type=community_type, value=value):
+                BGPCommunity(value=value, type=community_type).full_clean()
+
+    def test_invalid_values_per_type(self):
+        invalid = (
+            (BGPCommunityTypeChoices.TYPE_STANDARD, '65536:1'),  # part out of range
+            (BGPCommunityTypeChoices.TYPE_STANDARD, '65001'),  # missing part
+            (BGPCommunityTypeChoices.TYPE_STANDARD, '65001:1:1'),  # large-shaped
+            (BGPCommunityTypeChoices.TYPE_STANDARD, 'rt:65001:1'),  # extended-shaped
+            (BGPCommunityTypeChoices.TYPE_STANDARD, 'NO-EXPORT'),  # wrong case
+            (BGPCommunityTypeChoices.TYPE_EXTENDED, '65001:100'),  # missing prefix
+            (BGPCommunityTypeChoices.TYPE_EXTENDED, 'xx:65001:100'),  # unknown prefix
+            (BGPCommunityTypeChoices.TYPE_EXTENDED, 'rt:4294967296:1'),  # out of range
+            (BGPCommunityTypeChoices.TYPE_LARGE, '65001:100'),  # standard-shaped
+            (BGPCommunityTypeChoices.TYPE_LARGE, '4294967296:1:1'),  # out of range
+            (BGPCommunityTypeChoices.TYPE_LARGE, 'no-export'),  # name in wrong type
+        )
+        for community_type, value in invalid:
+            with self.subTest(type=community_type, value=value):
+                with self.assertRaises(ValidationError) as ctx:
+                    BGPCommunity(value=value, type=community_type).full_clean()
+                self.assertIn('value', ctx.exception.message_dict)
+
+
+class BGPCommunityListTestCase(BaseTestData, TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+
+    def test_str(self):
+        community_list = BGPCommunityList.objects.create(name='CL-TRANSIT', device=self.devices[0])
+        self.assertEqual(str(community_list), 'CL-TRANSIT')
+
+    def test_duplicate_name_on_device_is_rejected(self):
+        BGPCommunityList.objects.create(name='CL-1', device=self.devices[0])
+        duplicate = BGPCommunityList(name='CL-1', device=self.devices[0])
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            duplicate.save()
+
+    def test_duplicate_shared_name_is_rejected(self):
+        BGPCommunityList.objects.create(name='CL-SHARED')
+        duplicate = BGPCommunityList(name='CL-SHARED')
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            duplicate.save()
+
+    def test_shared_and_device_scoped_may_share_a_name(self):
+        BGPCommunityList.objects.create(name='CL-1')
+        community_list = BGPCommunityList(name='CL-1', device=self.devices[0])
+        community_list.full_clean()
+        community_list.save()
+        self.assertEqual(BGPCommunityList.objects.filter(name='CL-1').count(), 2)
+
+
+class BGPCommunityListRuleTestCase(BaseTestData, TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+        cls.community_list = BGPCommunityList.objects.create(name='CL-1', device=cls.devices[0])
+        cls.community = BGPCommunity.objects.create(value='65001:100')
+
+    def test_name_and_str(self):
+        rule = BGPCommunityListRule.objects.create(
+            community_list=self.community_list,
+            sequence=10,
+            action=ActionChoices.ACTION_PERMIT,
+            community=self.community,
+        )
+        self.assertEqual(rule.name, 'CL-1 10')
+        self.assertEqual(str(rule), 'CL-1 10')
+
+    def test_duplicate_sequence_is_rejected(self):
+        BGPCommunityListRule.objects.create(
+            community_list=self.community_list,
+            sequence=10,
+            action=ActionChoices.ACTION_PERMIT,
+            community=self.community,
+        )
+        duplicate = BGPCommunityListRule(
+            community_list=self.community_list,
+            sequence=10,
+            action=ActionChoices.ACTION_DENY,
+            community=self.community,
+        )
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            duplicate.save()
+
+    def test_community_referenced_by_a_rule_is_protected(self):
+        BGPCommunityListRule.objects.create(
+            community_list=self.community_list,
+            sequence=10,
+            action=ActionChoices.ACTION_PERMIT,
+            community=self.community,
+        )
+        with self.assertRaises(models.ProtectedError), transaction.atomic():
+            self.community.delete()
+
+    def test_deleting_the_list_removes_its_rules(self):
+        BGPCommunityListRule.objects.create(
+            community_list=self.community_list,
+            sequence=10,
+            action=ActionChoices.ACTION_PERMIT,
+            community=self.community,
+        )
+        self.community_list.delete()
+        self.assertEqual(BGPCommunityListRule.objects.count(), 0)
 
 
 class BGPRouterTestCase(BaseTestData, TestCase):

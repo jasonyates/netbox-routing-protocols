@@ -27,6 +27,9 @@ from .filters import (
     BFDProfileFilter,
     BGPAddressFamilyFilter,
     BGPAddressFamilyRedistributeFilter,
+    BGPCommunityFilter,
+    BGPCommunityListFilter,
+    BGPCommunityListRuleFilter,
     BGPPeerAddressFamilyFilter,
     BGPPeerFilter,
     BGPPeergroupAddressFamilyFilter,
@@ -47,6 +50,9 @@ __all__ = (
     'BFDProfileType',
     'BGPAddressFamilyRedistributeType',
     'BGPAddressFamilyType',
+    'BGPCommunityListRuleType',
+    'BGPCommunityListType',
+    'BGPCommunityType',
     'BGPPeerAddressFamilyType',
     'BGPPeerType',
     'BGPPeergroupAddressFamilyType',
@@ -138,6 +144,50 @@ class RouteMapType(OwnerMixin, NetBoxObjectType):
 class RouteMapRuleType(OwnerMixin, NetBoxObjectType):
     route_map: Annotated['RouteMapType', strawberry.lazy('netbox_routing_protocols.graphql.types')]
     prefix_list: Annotated['PrefixListType', strawberry.lazy('netbox_routing_protocols.graphql.types')] | None
+
+    @strawberry_django.field
+    def name(self) -> str:
+        return self.name
+
+
+#
+# BGP communities
+#
+
+
+@strawberry_django.type(
+    models.BGPCommunity,
+    fields='__all__',
+    filters=BGPCommunityFilter,
+    pagination=True,
+)
+class BGPCommunityType(OwnerMixin, NetBoxObjectType):
+    community_list_rules: list[
+        Annotated['BGPCommunityListRuleType', strawberry.lazy('netbox_routing_protocols.graphql.types')]
+    ]
+
+
+@strawberry_django.type(
+    models.BGPCommunityList,
+    fields='__all__',
+    filters=BGPCommunityListFilter,
+    pagination=True,
+)
+class BGPCommunityListType(OwnerMixin, NetBoxObjectType):
+    device: Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')] | None
+
+    rules: list[Annotated['BGPCommunityListRuleType', strawberry.lazy('netbox_routing_protocols.graphql.types')]]
+
+
+@strawberry_django.type(
+    models.BGPCommunityListRule,
+    fields='__all__',
+    filters=BGPCommunityListRuleFilter,
+    pagination=True,
+)
+class BGPCommunityListRuleType(OwnerMixin, NetBoxObjectType):
+    community_list: Annotated['BGPCommunityListType', strawberry.lazy('netbox_routing_protocols.graphql.types')]
+    community: Annotated['BGPCommunityType', strawberry.lazy('netbox_routing_protocols.graphql.types')]
 
     @strawberry_django.field
     def name(self) -> str:

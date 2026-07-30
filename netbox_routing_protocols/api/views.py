@@ -16,6 +16,9 @@ from netbox_routing_protocols.filtersets import (
     BFDProfileFilterSet,
     BGPAddressFamilyFilterSet,
     BGPAddressFamilyRedistributeFilterSet,
+    BGPCommunityFilterSet,
+    BGPCommunityListFilterSet,
+    BGPCommunityListRuleFilterSet,
     BGPPeerAddressFamilyFilterSet,
     BGPPeerFilterSet,
     BGPPeergroupAddressFamilyFilterSet,
@@ -31,6 +34,9 @@ from netbox_routing_protocols.models import (
     BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
+    BGPCommunity,
+    BGPCommunityList,
+    BGPCommunityListRule,
     BGPPeer,
     BGPPeerAddressFamily,
     BGPPeergroup,
@@ -129,6 +135,38 @@ class RouteMapRuleViewSet(NetBoxModelViewSet):
     ).prefetch_related('tags')
     serializer_class = serializers.RouteMapRuleSerializer
     filterset_class = RouteMapRuleFilterSet
+
+
+#
+# BGP communities
+#
+
+
+class BGPCommunityViewSet(NetBoxModelViewSet):
+    queryset = BGPCommunity.objects.select_related('owner').prefetch_related('tags')
+    serializer_class = serializers.BGPCommunitySerializer
+    filterset_class = BGPCommunityFilterSet
+
+
+class BGPCommunityListViewSet(NetBoxModelViewSet):
+    queryset = (
+        BGPCommunityList.objects.select_related('device', 'owner')
+        .prefetch_related('tags')
+        .annotate(rule_count=count_related(BGPCommunityListRule, 'community_list'))
+    )
+    serializer_class = serializers.BGPCommunityListSerializer
+    filterset_class = BGPCommunityListFilterSet
+
+
+class BGPCommunityListRuleViewSet(NetBoxModelViewSet):
+    queryset = BGPCommunityListRule.objects.select_related(
+        'community_list',
+        'community_list__device',
+        'community',
+        'owner',
+    ).prefetch_related('tags')
+    serializer_class = serializers.BGPCommunityListRuleSerializer
+    filterset_class = BGPCommunityListRuleFilterSet
 
 
 #

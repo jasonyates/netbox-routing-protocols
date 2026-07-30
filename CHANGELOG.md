@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- BGP communities ([#1]). `BGPCommunity` records a single community value — standard
+  (`ASN:NN` or the well-known names), extended (`rt:`/`soo:`) or large — validated per
+  type, unique, and global (communities are estate-wide values). `BGPCommunityList` is a
+  named, sequenced list of permit/deny rules referencing communities, scoped to a device
+  or shared fleet-wide, with a Rules tab and pre-filled Add button. Full UI, REST API
+  (`bgp-communities`, `bgp-community-lists`, `bgp-community-list-rules`), GraphQL, global
+  search and CSV import coverage. Matching and setting communities in route maps is
+  deliberately out of scope here and tracked by [#2].
 - `BFDProfile` model carrying BFD session parameters — TX/RX intervals, detect multiplier,
   echo mode and intervals, passive mode and minimum TTL ([#20]). Profiles follow the shared
   scoping pattern: scoped to a device, or fleet-wide when the device is blank. Full UI,
@@ -32,6 +40,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `bgp bestpath as-path multipath-relax` (or the platform equivalent). The default
   remains `True`. API and CSV field names change accordingly.
 
+[#1]: https://github.com/jasonyates/netbox-routing-protocols/issues/1
+[#2]: https://github.com/jasonyates/netbox-routing-protocols/issues/2
 [#5]: https://github.com/jasonyates/netbox-routing-protocols/issues/5
 [#13]: https://github.com/jasonyates/netbox-routing-protocols/issues/13
 [#20]: https://github.com/jasonyates/netbox-routing-protocols/issues/20

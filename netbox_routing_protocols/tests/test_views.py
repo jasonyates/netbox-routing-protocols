@@ -40,12 +40,16 @@ from netbox_routing_protocols.choices import (
     ActionChoices,
     AddressFamilyChoices,
     BGPAddressFamilyChoices,
+    BGPCommunityTypeChoices,
     BGPRedistributeProtocolChoices,
 )
 from netbox_routing_protocols.models import (
     BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
+    BGPCommunity,
+    BGPCommunityList,
+    BGPCommunityListRule,
     BGPPeer,
     BGPPeerAddressFamily,
     BGPPeergroup,
@@ -410,6 +414,114 @@ class BGPRouterTestCase(RoutingProtocolsViewTestCases.PrimaryObjectViewTestCase)
             f'{routers[0].pk},Updated description 1',
             f'{routers[1].pk},Updated description 2',
             f'{routers[2].pk},Updated description 3',
+        )
+
+
+class BGPCommunityTestCase(RoutingProtocolsViewTestCases.PrimaryObjectViewTestCase):
+    model = BGPCommunity
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+
+        communities = [BGPCommunity.objects.create(value=value) for value in ('65001:100', '65001:200', '65001:300')]
+
+        cls.form_data = {
+            'value': '65002:100',
+            'type': BGPCommunityTypeChoices.TYPE_STANDARD,
+            'name': 'CUSTOMERS',
+            'description': 'Created via the UI',
+            'comments': 'Some comments',
+        }
+
+        cls.csv_data = (
+            'value,type,name',
+            '65003:100,standard,PEERS',
+            'rt:65003:200,extended,',
+            '65003:1:1,large,',
+        )
+
+        cls.csv_update_data = (
+            'id,description',
+            f'{communities[0].pk},Updated description 1',
+            f'{communities[1].pk},Updated description 2',
+            f'{communities[2].pk},Updated description 3',
+        )
+
+
+class BGPCommunityListTestCase(RoutingProtocolsViewTestCases.PrimaryObjectViewTestCase):
+    model = BGPCommunityList
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+
+        community_lists = [
+            BGPCommunityList.objects.create(name=name, device=cls.devices[0]) for name in ('CL-1', 'CL-2', 'CL-3')
+        ]
+
+        cls.form_data = {
+            'name': 'CL-NEW',
+            'device': cls.devices[1].pk,
+            'description': 'Created via the UI',
+            'comments': 'Some comments',
+        }
+
+        cls.csv_data = (
+            'device,name,description',
+            f'{cls.devices[1].name},CL-CSV-1,List 1',
+            f'{cls.devices[1].name},CL-CSV-2,List 2',
+            ',CL-CSV-3,Shared list',
+        )
+
+        cls.csv_update_data = (
+            'id,description',
+            f'{community_lists[0].pk},Updated description 1',
+            f'{community_lists[1].pk},Updated description 2',
+            f'{community_lists[2].pk},Updated description 3',
+        )
+
+
+class BGPCommunityListRuleTestCase(RoutingProtocolsViewTestCases.PrimaryObjectViewTestCase):
+    model = BGPCommunityListRule
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+
+        cls.community_list = BGPCommunityList.objects.create(name='CL-1', device=cls.devices[0])
+        cls.community = BGPCommunity.objects.create(value='65001:100')
+        rules = [
+            BGPCommunityListRule.objects.create(
+                community_list=cls.community_list,
+                sequence=sequence,
+                action=ActionChoices.ACTION_PERMIT,
+                community=cls.community,
+            )
+            for sequence in (10, 20, 30)
+        ]
+
+        cls.form_data = {
+            'community_list': cls.community_list.pk,
+            'sequence': 40,
+            'action': ActionChoices.ACTION_DENY,
+            'community': cls.community.pk,
+            'description': 'Created via the UI',
+            'comments': 'Some comments',
+        }
+
+        cls.csv_data = (
+            'device,community_list,sequence,action,community',
+            f'{cls.devices[0].name},CL-1,50,permit,65001:100',
+            f'{cls.devices[0].name},CL-1,60,deny,65001:100',
+            f'{cls.devices[0].name},CL-1,70,permit,65001:100',
+        )
+
+        cls.csv_update_data = (
+            'id,description',
+            f'{rules[0].pk},Updated description 1',
+            f'{rules[1].pk},Updated description 2',
+            f'{rules[2].pk},Updated description 3',
         )
 
 
