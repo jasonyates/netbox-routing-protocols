@@ -1,6 +1,7 @@
 import re
 
 from django import forms
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Device, Interface
@@ -856,7 +857,7 @@ class BGPAddressFamilyForm(NetBoxModelForm):
         queryset=RouteMap.objects.all(),
         required=False,
         query_params={
-            'device_id': '$device',
+            'available_on_device': '$device',
         },
     )
     networks = DynamicModelMultipleChoiceField(
@@ -869,7 +870,7 @@ class BGPAddressFamilyForm(NetBoxModelForm):
         queryset=RouteMap.objects.all(),
         required=False,
         query_params={
-            'device_id': '$device',
+            'available_on_device': '$device',
         },
     )
     comments = CommentField()
@@ -1079,9 +1080,10 @@ class BGPAddressFamilyImportForm(BGPRouterCSVMixin, NetBoxModelImportForm):
     def __init__(self, data=None, *args, **kwargs):
         super().__init__(data, *args, **kwargs)
 
-        # Route map names are only unique per device.
+        # Route map names are only unique per device; shared route maps (no device)
+        # remain selectable from any device.
         if data and (device := data.get('device')):
-            route_maps = RouteMap.objects.filter(device__name=device)
+            route_maps = RouteMap.objects.filter(Q(device__name=device) | Q(device__isnull=True))
             self.fields['aggregate_route_map'].queryset = route_maps
             self.fields['network_route_map'].queryset = route_maps
 
@@ -1109,7 +1111,7 @@ class BGPAddressFamilyRedistributeForm(NetBoxModelForm):
         queryset=RouteMap.objects.all(),
         required=False,
         query_params={
-            'device_id': '$device',
+            'available_on_device': '$device',
         },
     )
     comments = CommentField()
@@ -1275,7 +1277,7 @@ class BGPAddressFamilyRedistributeImportForm(NetBoxModelImportForm):
             if vrf := data.get('vrf'):
                 families = families.filter(bgprouter__vrf__name=vrf)
             self.fields['family'].queryset = families
-            self.fields['route_map'].queryset = RouteMap.objects.filter(device__name=device)
+            self.fields['route_map'].queryset = RouteMap.objects.filter(Q(device__name=device) | Q(device__isnull=True))
 
 
 #
@@ -1301,7 +1303,7 @@ class BGPPeerAddressFamilyForm(NetBoxModelForm):
         queryset=RouteMap.objects.all(),
         required=False,
         query_params={
-            'device_id': '$device',
+            'available_on_device': '$device',
         },
     )
     outbound_policy = DynamicModelChoiceField(
@@ -1309,7 +1311,7 @@ class BGPPeerAddressFamilyForm(NetBoxModelForm):
         queryset=RouteMap.objects.all(),
         required=False,
         query_params={
-            'device_id': '$device',
+            'available_on_device': '$device',
         },
     )
     comments = CommentField()
@@ -1561,8 +1563,9 @@ class BGPPeerAddressFamilyImportForm(NetBoxModelImportForm):
         peers = BGPPeer.objects.all()
         if device := data.get('device'):
             peers = peers.filter(bgprouter__device__name=device)
-            self.fields['inbound_policy'].queryset = RouteMap.objects.filter(device__name=device)
-            self.fields['outbound_policy'].queryset = RouteMap.objects.filter(device__name=device)
+            route_maps = RouteMap.objects.filter(Q(device__name=device) | Q(device__isnull=True))
+            self.fields['inbound_policy'].queryset = route_maps
+            self.fields['outbound_policy'].queryset = route_maps
         if vrf := data.get('vrf'):
             peers = peers.filter(bgprouter__vrf__name=vrf)
         self.fields['peer'].queryset = peers
@@ -1590,7 +1593,7 @@ class BGPPeergroupAddressFamilyForm(NetBoxModelForm):
         queryset=RouteMap.objects.all(),
         required=False,
         query_params={
-            'device_id': '$device',
+            'available_on_device': '$device',
         },
     )
     outbound_policy = DynamicModelChoiceField(
@@ -1598,7 +1601,7 @@ class BGPPeergroupAddressFamilyForm(NetBoxModelForm):
         queryset=RouteMap.objects.all(),
         required=False,
         query_params={
-            'device_id': '$device',
+            'available_on_device': '$device',
         },
     )
     comments = CommentField()
@@ -1847,8 +1850,9 @@ class BGPPeergroupAddressFamilyImportForm(NetBoxModelImportForm):
         peergroups = BGPPeergroup.objects.all()
         if device := data.get('device'):
             peergroups = peergroups.filter(bgprouter__device__name=device)
-            self.fields['inbound_policy'].queryset = RouteMap.objects.filter(device__name=device)
-            self.fields['outbound_policy'].queryset = RouteMap.objects.filter(device__name=device)
+            route_maps = RouteMap.objects.filter(Q(device__name=device) | Q(device__isnull=True))
+            self.fields['inbound_policy'].queryset = route_maps
+            self.fields['outbound_policy'].queryset = route_maps
         if vrf := data.get('vrf'):
             peergroups = peergroups.filter(bgprouter__vrf__name=vrf)
         self.fields['peergroup'].queryset = peergroups

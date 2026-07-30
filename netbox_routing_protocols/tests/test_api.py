@@ -184,9 +184,9 @@ class PrefixListTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
                 'device': cls.devices[1].pk,
                 'address_family': AddressFamilyChoices.FAMILY_IPV6,
             },
+            # No device: a shared, fleet-wide prefix list.
             {
                 'name': 'PL-NEW-3',
-                'device': cls.devices[1].pk,
                 'address_family': AddressFamilyChoices.FAMILY_IPV4,
             },
         ]
@@ -290,7 +290,8 @@ class RouteMapTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
         cls.create_data = [
             {'name': 'RM-NEW-1', 'device': cls.devices[1].pk},
             {'name': 'RM-NEW-2', 'device': cls.devices[1].pk},
-            {'name': 'RM-NEW-3', 'device': cls.devices[1].pk},
+            # No device: a shared, fleet-wide route map.
+            {'name': 'RM-NEW-3'},
         ]
 
     def test_rule_count_is_annotated_on_detail(self):

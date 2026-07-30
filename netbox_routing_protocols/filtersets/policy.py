@@ -38,6 +38,16 @@ class PrefixListFilterSet(PrimaryModelFilterSet):
         to_field_name='name',
         label=_('Device (name)'),
     )
+    available_on_device = django_filters.ModelMultipleChoiceFilter(
+        queryset=Device.objects.all(),
+        method='_available_on_device',
+        label=_('Available on device (ID)'),
+    )
+    shared = django_filters.BooleanFilter(
+        field_name='device',
+        lookup_expr='isnull',
+        label=_('Shared (no device)'),
+    )
     address_family = django_filters.MultipleChoiceFilter(
         choices=AddressFamilyChoices,
         label=_('Address family'),
@@ -46,6 +56,12 @@ class PrefixListFilterSet(PrimaryModelFilterSet):
     class Meta:
         model = PrefixList
         fields = ('id', 'name', 'description')
+
+    def _available_on_device(self, queryset, name, value):
+        """Objects usable on a device: scoped to it, or shared fleet-wide."""
+        if not value:
+            return queryset
+        return queryset.filter(Q(device__isnull=True) | Q(device__in=value))
 
     def search(self, queryset, name, value):
         value = value.strip()
@@ -136,10 +152,26 @@ class RouteMapFilterSet(PrimaryModelFilterSet):
         to_field_name='name',
         label=_('Device (name)'),
     )
+    available_on_device = django_filters.ModelMultipleChoiceFilter(
+        queryset=Device.objects.all(),
+        method='_available_on_device',
+        label=_('Available on device (ID)'),
+    )
+    shared = django_filters.BooleanFilter(
+        field_name='device',
+        lookup_expr='isnull',
+        label=_('Shared (no device)'),
+    )
 
     class Meta:
         model = RouteMap
         fields = ('id', 'name', 'description')
+
+    def _available_on_device(self, queryset, name, value):
+        """Objects usable on a device: scoped to it, or shared fleet-wide."""
+        if not value:
+            return queryset
+        return queryset.filter(Q(device__isnull=True) | Q(device__in=value))
 
     def search(self, queryset, name, value):
         value = value.strip()

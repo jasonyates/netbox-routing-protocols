@@ -384,6 +384,17 @@ class PrefixListFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, Change
         params = {'address_family': [AddressFamilyChoices.FAMILY_IPV6]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
 
+    def test_available_on_device(self):
+        PrefixList.objects.create(name='PL-SHARED', address_family=AddressFamilyChoices.FAMILY_IPV4)
+        # The device's own two lists, plus the shared one.
+        params = {'available_on_device': [self.devices[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
+
+    def test_shared(self):
+        PrefixList.objects.create(name='PL-SHARED', address_family=AddressFamilyChoices.FAMILY_IPV4)
+        self.assertEqual(self.filterset({'shared': True}, self.queryset).qs.count(), 1)
+        self.assertEqual(self.filterset({'shared': False}, self.queryset).qs.count(), 3)
+
     def test_search_matches_name(self):
         self.assertEqual(self.filterset({'q': 'CORE-OUT'}, self.queryset).qs.count(), 1)
 
@@ -431,6 +442,17 @@ class RouteMapFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLo
     def test_device(self):
         params = {'device_id': [self.devices[0].pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
+
+    def test_available_on_device(self):
+        RouteMap.objects.create(name='RM-SHARED')
+        # The device's own two route maps, plus the shared one.
+        params = {'available_on_device': [self.devices[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
+
+    def test_shared(self):
+        RouteMap.objects.create(name='RM-SHARED')
+        self.assertEqual(self.filterset({'shared': True}, self.queryset).qs.count(), 1)
+        self.assertEqual(self.filterset({'shared': False}, self.queryset).qs.count(), 3)
 
     def test_search_matches_name(self):
         self.assertEqual(self.filterset({'q': 'RM-EDGE'}, self.queryset).qs.count(), 1)

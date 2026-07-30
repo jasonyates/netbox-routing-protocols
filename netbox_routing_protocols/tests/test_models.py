@@ -383,6 +383,31 @@ class PrefixListTestCase(BaseTestData, TestCase):
         prefix_list.save()
         self.assertEqual(PrefixList.objects.filter(name='PL-1').count(), 2)
 
+    def test_shared_prefix_list_needs_no_device(self):
+        prefix_list = PrefixList(name='PL-SHARED', address_family=AddressFamilyChoices.FAMILY_IPV4)
+        prefix_list.full_clean()
+        prefix_list.save()
+        self.assertIsNone(prefix_list.device)
+
+    def test_duplicate_shared_name_is_rejected(self):
+        PrefixList.objects.create(name='PL-SHARED', address_family=AddressFamilyChoices.FAMILY_IPV4)
+        duplicate = PrefixList(name='PL-SHARED', address_family=AddressFamilyChoices.FAMILY_IPV6)
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            duplicate.save()
+
+    def test_shared_and_device_scoped_may_share_a_name(self):
+        PrefixList.objects.create(name='PL-1', address_family=AddressFamilyChoices.FAMILY_IPV4)
+        prefix_list = PrefixList(
+            name='PL-1',
+            device=self.devices[0],
+            address_family=AddressFamilyChoices.FAMILY_IPV4,
+        )
+        prefix_list.full_clean()
+        prefix_list.save()
+        self.assertEqual(PrefixList.objects.filter(name='PL-1').count(), 2)
+
 
 @override_settings(PLUGINS_CONFIG=PLUGINS_CONFIG_NO_DEFAULT_DENY)
 class PrefixListRuleTestCase(BaseTestData, TestCase):
@@ -561,6 +586,21 @@ class RouteMapTestCase(BaseTestData, TestCase):
         with self.assertRaises(IntegrityError), transaction.atomic():
             duplicate.save()
 
+    def test_duplicate_shared_name_is_rejected(self):
+        RouteMap.objects.create(name='RM-SHARED')
+        duplicate = RouteMap(name='RM-SHARED')
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            duplicate.save()
+
+    def test_shared_and_device_scoped_may_share_a_name(self):
+        RouteMap.objects.create(name='RM-1')
+        route_map = RouteMap(name='RM-1', device=self.devices[0])
+        route_map.full_clean()
+        route_map.save()
+        self.assertEqual(RouteMap.objects.filter(name='RM-1').count(), 2)
+
 
 @override_settings(PLUGINS_CONFIG=PLUGINS_CONFIG_NO_DEFAULT_DENY)
 class RouteMapRuleTestCase(BaseTestData, TestCase):
@@ -639,6 +679,40 @@ class RouteMapRuleTestCase(BaseTestData, TestCase):
             sequence=10,
             action=ActionChoices.ACTION_PERMIT,
             prefix_list=self.other_prefix_list,
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            rule.full_clean()
+        self.assertIn('prefix_list', ctx.exception.message_dict)
+
+    def test_device_scoped_route_map_accepts_a_shared_prefix_list(self):
+        shared = PrefixList.objects.create(name='PL-SHARED', address_family=AddressFamilyChoices.FAMILY_IPV4)
+        rule = RouteMapRule(
+            route_map=self.route_map,
+            sequence=10,
+            action=ActionChoices.ACTION_PERMIT,
+            prefix_list=shared,
+        )
+        rule.full_clean()
+
+    def test_shared_route_map_accepts_a_shared_prefix_list(self):
+        shared_map = RouteMap.objects.create(name='RM-SHARED')
+        shared_list = PrefixList.objects.create(name='PL-SHARED', address_family=AddressFamilyChoices.FAMILY_IPV4)
+        rule = RouteMapRule(
+            route_map=shared_map,
+            sequence=10,
+            action=ActionChoices.ACTION_PERMIT,
+            prefix_list=shared_list,
+        )
+        rule.full_clean()
+
+    def test_shared_route_map_rejects_a_device_scoped_prefix_list(self):
+        # The shared map renders on every device; a device-scoped list exists on one.
+        shared_map = RouteMap.objects.create(name='RM-SHARED')
+        rule = RouteMapRule(
+            route_map=shared_map,
+            sequence=10,
+            action=ActionChoices.ACTION_PERMIT,
+            prefix_list=self.prefix_list,
         )
         with self.assertRaises(ValidationError) as ctx:
             rule.full_clean()
@@ -938,6 +1012,16 @@ class BGPAddressFamilyTestCase(BaseTestData, TestCase):
         )
         family.full_clean()
 
+    def test_clean_accepts_shared_route_maps(self):
+        shared = RouteMap.objects.create(name='RM-SHARED')
+        family = BGPAddressFamily(
+            bgprouter=self.router,
+            family=BGPAddressFamilyChoices.AFI_IPV4_UNICAST,
+            aggregate_route_map=shared,
+            network_route_map=shared,
+        )
+        family.full_clean()
+
     def test_route_map_in_use_is_protected(self):
         BGPAddressFamily.objects.create(
             bgprouter=self.router,
@@ -994,6 +1078,14 @@ class BGPAddressFamilyRedistributeTestCase(BaseTestData, TestCase):
             family=self.family,
             protocol=BGPRedistributeProtocolChoices.PROTOCOL_STATIC,
             route_map=self.route_map,
+        )
+        redistribution.full_clean()
+
+    def test_clean_accepts_a_shared_route_map(self):
+        redistribution = BGPAddressFamilyRedistribute(
+            family=self.family,
+            protocol=BGPRedistributeProtocolChoices.PROTOCOL_STATIC,
+            route_map=RouteMap.objects.create(name='RM-SHARED'),
         )
         redistribution.full_clean()
 
@@ -1091,6 +1183,24 @@ class BGPSessionAddressFamilyTestCase(BaseTestData, TestCase):
             family=BGPAddressFamilyChoices.AFI_IPV4_UNICAST,
             inbound_policy=self.route_map,
             outbound_policy=self.route_map,
+        )
+        peergroup_family.full_clean()
+
+    def test_clean_accepts_shared_policies(self):
+        shared = RouteMap.objects.create(name='RM-SHARED')
+        peer_family = BGPPeerAddressFamily(
+            peer=self.peer,
+            family=BGPAddressFamilyChoices.AFI_IPV4_UNICAST,
+            inbound_policy=shared,
+            outbound_policy=shared,
+        )
+        peer_family.full_clean()
+
+        peergroup_family = BGPPeergroupAddressFamily(
+            peergroup=self.peergroup,
+            family=BGPAddressFamilyChoices.AFI_IPV4_UNICAST,
+            inbound_policy=shared,
+            outbound_policy=shared,
         )
         peergroup_family.full_clean()
 

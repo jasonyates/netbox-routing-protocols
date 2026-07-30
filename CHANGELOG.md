@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Prefix lists and route maps may now be shared fleet-wide by leaving their device blank
+  ([#13]). A shared policy object may be referenced from any device's BGP configuration or
+  route map rules; names are unique per device and among shared objects. A new
+  `available_on_device` API filter returns the objects usable on a device (its own plus
+  shared ones), and a `shared` filter selects shared objects alone.
+
 ### Changed
 - `BGPRouter.aspath_ignore` renamed to `multipath_relax` ([#5]). The field was inherited
   from an NVUE estate where `aspath-ignore` spells multipath-relax, and the old name and
@@ -16,6 +23,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   remains `True`. API and CSV field names change accordingly.
 
 [#5]: https://github.com/jasonyates/netbox-routing-protocols/issues/5
+[#13]: https://github.com/jasonyates/netbox-routing-protocols/issues/13
 
 ## [1.0.0] — 2026-07-29
 

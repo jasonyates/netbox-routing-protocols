@@ -94,7 +94,7 @@ class StaticRouteType(OwnerMixin, NetBoxObjectType):
     pagination=True,
 )
 class PrefixListType(OwnerMixin, NetBoxObjectType):
-    device: Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')]
+    device: Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')] | None
 
     rules: list[Annotated['PrefixListRuleType', strawberry.lazy('netbox_routing_protocols.graphql.types')]]
     route_map_rules: list[Annotated['RouteMapRuleType', strawberry.lazy('netbox_routing_protocols.graphql.types')]]
@@ -122,7 +122,7 @@ class PrefixListRuleType(OwnerMixin, NetBoxObjectType):
     pagination=True,
 )
 class RouteMapType(OwnerMixin, NetBoxObjectType):
-    device: Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')]
+    device: Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')] | None
 
     rules: list[Annotated['RouteMapRuleType', strawberry.lazy('netbox_routing_protocols.graphql.types')]]
 

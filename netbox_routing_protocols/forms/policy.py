@@ -1,4 +1,5 @@
 from django import forms
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Device
@@ -52,7 +53,9 @@ class PrefixListForm(NetBoxModelForm):
     device = DynamicModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
+        required=False,
         selector=True,
+        help_text=_('Leave blank to share the prefix list fleet-wide.'),
     )
     comments = CommentField()
 
@@ -109,7 +112,7 @@ class PrefixListBulkEditForm(NetBoxModelBulkEditForm):
     comments = CommentField()
 
     fieldsets = (FieldSet('device', 'address_family', 'description'),)
-    nullable_fields = ('description', 'comments')
+    nullable_fields = ('device', 'description', 'comments')
 
 
 class PrefixListImportForm(NetBoxModelImportForm):
@@ -117,7 +120,8 @@ class PrefixListImportForm(NetBoxModelImportForm):
         label=_('Device'),
         queryset=Device.objects.all(),
         to_field_name='name',
-        help_text=_('Name of the device on which the prefix list is configured'),
+        required=False,
+        help_text=_('Name of the device on which the prefix list is configured (blank for a shared prefix list)'),
     )
     address_family = CSVChoiceField(
         label=_('Address Family'),
@@ -152,7 +156,7 @@ class PrefixListRuleForm(NetBoxModelForm):
         label=_('Prefix List'),
         queryset=PrefixList.objects.all(),
         query_params={
-            'device_id': '$device',
+            'available_on_device': '$device',
         },
     )
     prefix = DynamicModelChoiceField(
@@ -292,7 +296,8 @@ class PrefixListRuleImportForm(NetBoxModelImportForm):
         label=_('Device'),
         queryset=Device.objects.all(),
         to_field_name='name',
-        help_text=_('Name of the device owning the prefix list (prefix list names are unique per device)'),
+        required=False,
+        help_text=_('Name of the device owning the prefix list (blank when the prefix list is shared)'),
     )
     prefix_list = CSVModelChoiceField(
         label=_('Prefix List'),
@@ -346,9 +351,14 @@ class PrefixListRuleImportForm(NetBoxModelImportForm):
     def __init__(self, data=None, *args, **kwargs):
         super().__init__(data, *args, **kwargs)
 
-        # Prefix list names are only unique per device, so narrow the selection to the named device.
-        if data and (device := data.get('device')):
-            self.fields['prefix_list'].queryset = PrefixList.objects.filter(device__name=device)
+        # Prefix list names are only unique per device (or among shared lists), so narrow
+        # the selection: a named device selects that device's lists, a blank device
+        # selects shared lists.
+        if data:
+            if device := data.get('device'):
+                self.fields['prefix_list'].queryset = PrefixList.objects.filter(device__name=device)
+            else:
+                self.fields['prefix_list'].queryset = PrefixList.objects.filter(device__isnull=True)
 
 
 #
@@ -360,7 +370,9 @@ class RouteMapForm(NetBoxModelForm):
     device = DynamicModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
+        required=False,
         selector=True,
+        help_text=_('Leave blank to share the route map fleet-wide.'),
     )
     comments = CommentField()
 
@@ -407,7 +419,7 @@ class RouteMapBulkEditForm(NetBoxModelBulkEditForm):
     comments = CommentField()
 
     fieldsets = (FieldSet('device', 'description'),)
-    nullable_fields = ('description', 'comments')
+    nullable_fields = ('device', 'description', 'comments')
 
 
 class RouteMapImportForm(NetBoxModelImportForm):
@@ -415,7 +427,8 @@ class RouteMapImportForm(NetBoxModelImportForm):
         label=_('Device'),
         queryset=Device.objects.all(),
         to_field_name='name',
-        help_text=_('Name of the device on which the route map is configured'),
+        required=False,
+        help_text=_('Name of the device on which the route map is configured (blank for a shared route map)'),
     )
 
     fieldsets = (
@@ -445,7 +458,7 @@ class RouteMapRuleForm(NetBoxModelForm):
         label=_('Route Map'),
         queryset=RouteMap.objects.all(),
         query_params={
-            'device_id': '$device',
+            'available_on_device': '$device',
         },
     )
     prefix_list = DynamicModelChoiceField(
@@ -453,9 +466,9 @@ class RouteMapRuleForm(NetBoxModelForm):
         queryset=PrefixList.objects.all(),
         required=False,
         query_params={
-            'device_id': '$device',
+            'available_on_device': '$device',
         },
-        help_text=_('Must belong to the same device as the route map.'),
+        help_text=_('Must be shared, or belong to the same device as the route map.'),
     )
     comments = CommentField()
 
@@ -561,7 +574,8 @@ class RouteMapRuleImportForm(NetBoxModelImportForm):
         label=_('Device'),
         queryset=Device.objects.all(),
         to_field_name='name',
-        help_text=_('Name of the device owning the route map (route map names are unique per device)'),
+        required=False,
+        help_text=_('Name of the device owning the route map (blank when the route map is shared)'),
     )
     route_map = CSVModelChoiceField(
         label=_('Route Map'),
@@ -605,7 +619,17 @@ class RouteMapRuleImportForm(NetBoxModelImportForm):
     def __init__(self, data=None, *args, **kwargs):
         super().__init__(data, *args, **kwargs)
 
-        # Route map and prefix list names are only unique per device.
-        if data and (device := data.get('device')):
-            self.fields['route_map'].queryset = RouteMap.objects.filter(device__name=device)
-            self.fields['prefix_list'].queryset = PrefixList.objects.filter(device__name=device)
+        # Route map and prefix list names are only unique per device (or among shared
+        # objects). A named device selects that device's route maps; a blank device
+        # selects shared ones. The matched prefix list may be shared either way, so
+        # shared lists stay selectable alongside the device's own — a duplicate name
+        # across the two surfaces as a "not a unique value" import error.
+        if data:
+            if device := data.get('device'):
+                self.fields['route_map'].queryset = RouteMap.objects.filter(device__name=device)
+                self.fields['prefix_list'].queryset = PrefixList.objects.filter(
+                    Q(device__name=device) | Q(device__isnull=True)
+                )
+            else:
+                self.fields['route_map'].queryset = RouteMap.objects.filter(device__isnull=True)
+                self.fields['prefix_list'].queryset = PrefixList.objects.filter(device__isnull=True)

@@ -412,7 +412,8 @@ class BGPAddressFamily(PrimaryModel):
 
         for field in ('aggregate_route_map', 'network_route_map'):
             route_map = getattr(self, field)
-            if route_map and route_map.device_id != self.bgprouter.device_id:
+            # A shared route map (no device) is usable from any router.
+            if route_map and route_map.device_id and route_map.device_id != self.bgprouter.device_id:
                 raise ValidationError(
                     {
                         field: (
@@ -475,7 +476,8 @@ class BGPAddressFamilyRedistribute(PrimaryModel):
     def clean(self):
         super().clean()
 
-        if self.route_map and self.family_id:
+        if self.route_map and self.route_map.device_id and self.family_id:
+            # A shared route map (no device) is usable from any router.
             if self.route_map.device_id != self.family.bgprouter.device_id:
                 raise ValidationError(
                     {
@@ -542,7 +544,8 @@ class BGPSessionAddressFamilyAttributes(PrimaryModel):
     def _validate_policy_device(self, device_id, device_name):
         for field in ('inbound_policy', 'outbound_policy'):
             route_map = getattr(self, field)
-            if route_map and route_map.device_id != device_id:
+            # A shared route map (no device) is usable from any router.
+            if route_map and route_map.device_id and route_map.device_id != device_id:
                 raise ValidationError(
                     {
                         field: f'Route map {route_map.name} does not belong to device {device_name}.',
