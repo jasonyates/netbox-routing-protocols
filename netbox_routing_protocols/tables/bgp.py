@@ -117,8 +117,9 @@ class BGPPeergroupTable(NetBoxTable):
     enable = columns.BooleanColumn(
         verbose_name=_('Enabled'),
     )
-    bfd = columns.BooleanColumn(
-        verbose_name=_('BFD'),
+    bfd = tables.Column(
+        verbose_name=_('BFD Profile'),
+        linkify=True,
     )
     ebgp_multihop = columns.BooleanColumn(
         verbose_name=_('eBGP Multihop'),
@@ -201,8 +202,9 @@ class BGPPeerTable(NetBoxTable):
     enable = columns.BooleanColumn(
         verbose_name=_('Enabled'),
     )
-    bfd = columns.BooleanColumn(
-        verbose_name=_('BFD'),
+    bfd = tables.Column(
+        verbose_name=_('BFD Profile'),
+        linkify=True,
     )
     ebgp_multihop = columns.BooleanColumn(
         verbose_name=_('eBGP Multihop'),

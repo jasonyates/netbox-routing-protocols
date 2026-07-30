@@ -11,6 +11,7 @@ from utilities.filtersets import register_filterset
 
 from netbox_routing_protocols.choices import BGPAddressFamilyChoices, BGPRedistributeProtocolChoices
 from netbox_routing_protocols.models import (
+    BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
     BGPPeer,
@@ -142,6 +143,17 @@ class BGPPeergroupFilterSet(PrimaryModelFilterSet):
         to_field_name='asn',
         label=_('Remote AS (number)'),
     )
+    bfd_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='bfd',
+        queryset=BFDProfile.objects.all(),
+        label=_('BFD profile (ID)'),
+    )
+    bfd = django_filters.ModelMultipleChoiceFilter(
+        field_name='bfd__name',
+        queryset=BFDProfile.objects.all(),
+        to_field_name='name',
+        label=_('BFD profile (name)'),
+    )
 
     class Meta:
         model = BGPPeergroup
@@ -149,7 +161,6 @@ class BGPPeergroupFilterSet(PrimaryModelFilterSet):
             'id',
             'name',
             'enable',
-            'bfd',
             'ebgp_multihop',
             'ebgp_multihop_ttl',
             'description',
@@ -228,13 +239,23 @@ class BGPPeerFilterSet(PrimaryModelFilterSet):
         to_field_name='asn',
         label=_('Remote AS (number)'),
     )
+    bfd_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='bfd',
+        queryset=BFDProfile.objects.all(),
+        label=_('BFD profile (ID)'),
+    )
+    bfd = django_filters.ModelMultipleChoiceFilter(
+        field_name='bfd__name',
+        queryset=BFDProfile.objects.all(),
+        to_field_name='name',
+        label=_('BFD profile (name)'),
+    )
 
     class Meta:
         model = BGPPeer
         fields = (
             'id',
             'enable',
-            'bfd',
             'ebgp_multihop',
             'ebgp_multihop_ttl',
             'description',

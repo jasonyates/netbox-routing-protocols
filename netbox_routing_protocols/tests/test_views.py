@@ -43,6 +43,7 @@ from netbox_routing_protocols.choices import (
     BGPRedistributeProtocolChoices,
 )
 from netbox_routing_protocols.models import (
+    BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
     BGPPeer,
@@ -244,6 +245,42 @@ class PrefixListRuleTestCase(RoutingProtocolsViewTestCases.PrimaryObjectViewTest
         )
 
 
+class BFDProfileTestCase(RoutingProtocolsViewTestCases.PrimaryObjectViewTestCase):
+    model = BFDProfile
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+
+        profiles = [
+            BFDProfile.objects.create(name=name, device=cls.devices[0], min_tx=300, min_rx=300)
+            for name in ('BFD-1', 'BFD-2', 'BFD-3')
+        ]
+
+        cls.form_data = {
+            'name': 'BFD-NEW',
+            'min_tx': 250,
+            'min_rx': 250,
+            'detect_multiplier': 3,
+            'description': 'Created via the UI',
+            'comments': 'Some comments',
+        }
+
+        cls.csv_data = (
+            'device,name,min_tx,min_rx,detect_multiplier',
+            f'{cls.devices[1].name},BFD-CSV-1,300,300,3',
+            f'{cls.devices[1].name},BFD-CSV-2,300,300,4',
+            ',BFD-CSV-3,1000,1000,5',
+        )
+
+        cls.csv_update_data = (
+            'id,description',
+            f'{profiles[0].pk},Updated description 1',
+            f'{profiles[1].pk},Updated description 2',
+            f'{profiles[2].pk},Updated description 3',
+        )
+
+
 class RouteMapTestCase(RoutingProtocolsViewTestCases.PrimaryObjectViewTestCase):
     model = RouteMap
 
@@ -391,12 +428,14 @@ class BGPPeergroupTestCase(RoutingProtocolsViewTestCases.PrimaryObjectViewTestCa
             for name in ('PG-CORE', 'PG-EDGE', 'PG-TRANSIT')
         ]
 
+        cls.bfd_profile = BFDProfile.objects.create(name='default')
+
         cls.form_data = {
             'bgprouter': cls.other_router.pk,
             'name': 'PG-NEW',
             'enable': True,
             'remote_as': cls.asns[1].pk,
-            'bfd': True,
+            'bfd': cls.bfd_profile.pk,
             'ebgp_multihop': False,
             'description': 'Created via the UI',
             'comments': 'Some comments',
@@ -433,12 +472,14 @@ class BGPPeerTestCase(RoutingProtocolsViewTestCases.PrimaryObjectViewTestCase):
             for address in (cls.addresses4[0], cls.addresses4[1], cls.addresses4[2])
         ]
 
+        cls.bfd_profile = BFDProfile.objects.create(name='default')
+
         cls.form_data = {
             'bgprouter': cls.other_router.pk,
             'remote_address': cls.addresses4[7].pk,
             'remote_as': cls.asns[1].pk,
             'enable': True,
-            'bfd': True,
+            'bfd': cls.bfd_profile.pk,
             'ebgp_multihop': False,
             'description': 'Created via the UI',
             'comments': 'Some comments',
@@ -1068,7 +1109,6 @@ class BGPPasswordFormTestCase(BaseTestData, TestCase):
                     'name': self.peergroup.name,
                     'remote_as': self.asns[0].pk,
                     'enable': 'on',
-                    'bfd': 'on',
                 },
             ),
             (
@@ -1079,7 +1119,6 @@ class BGPPasswordFormTestCase(BaseTestData, TestCase):
                     'remote_address': self.addresses4[0].pk,
                     'remote_as': self.asns[0].pk,
                     'enable': 'on',
-                    'bfd': 'on',
                 },
             ),
         )

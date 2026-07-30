@@ -1,3 +1,4 @@
+from .bfd import BFDProfileFilterSet
 from .bgp import (
     BGPAddressFamilyFilterSet,
     BGPAddressFamilyRedistributeFilterSet,
@@ -16,6 +17,7 @@ from .policy import (
 from .static import StaticRouteFilterSet
 
 __all__ = (
+    'BFDProfileFilterSet',
     'BGPAddressFamilyFilterSet',
     'BGPAddressFamilyRedistributeFilterSet',
     'BGPPeerAddressFamilyFilterSet',

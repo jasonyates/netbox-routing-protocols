@@ -1,3 +1,9 @@
+from .bfd import (
+    BFDProfileBulkEditForm,
+    BFDProfileFilterForm,
+    BFDProfileForm,
+    BFDProfileImportForm,
+)
 from .bgp import (
     BGPAddressFamilyBulkEditForm,
     BGPAddressFamilyFilterForm,
@@ -54,6 +60,10 @@ from .static import (
 )
 
 __all__ = (
+    'BFDProfileBulkEditForm',
+    'BFDProfileFilterForm',
+    'BFDProfileForm',
+    'BFDProfileImportForm',
     'BGPAddressFamilyBulkEditForm',
     'BGPAddressFamilyFilterForm',
     'BGPAddressFamilyForm',

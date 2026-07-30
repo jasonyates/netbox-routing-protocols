@@ -27,6 +27,7 @@ from utilities.forms.widgets import BulkEditNullBooleanSelect
 
 from netbox_routing_protocols.choices import BGPAddressFamilyChoices, BGPRedistributeProtocolChoices
 from netbox_routing_protocols.models import (
+    BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
     BGPPeer,
@@ -364,6 +365,12 @@ class BGPPeergroupForm(BGPPasswordMixin, NetBoxModelForm):
         label=_('Remote AS'),
         queryset=ASN.objects.all(),
     )
+    bfd = DynamicModelChoiceField(
+        label=_('BFD Profile'),
+        queryset=BFDProfile.objects.all(),
+        required=False,
+        help_text=_('Enable BFD for this session using the parameters of the referenced profile.'),
+    )
     comments = CommentField()
 
     fieldsets = (
@@ -422,10 +429,10 @@ class BGPPeergroupFilterForm(PrimaryModelFilterSetForm):
         required=False,
         widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES),
     )
-    bfd = forms.NullBooleanField(
-        label=_('BFD'),
+    bfd_id = DynamicModelMultipleChoiceField(
+        label=_('BFD Profile'),
+        queryset=BFDProfile.objects.all(),
         required=False,
-        widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES),
     )
     ebgp_multihop = forms.NullBooleanField(
         label=_('eBGP Multihop'),
@@ -437,7 +444,7 @@ class BGPPeergroupFilterForm(PrimaryModelFilterSetForm):
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('device_id', 'vrf_id', 'bgprouter_id', name=_('BGP Router')),
-        FieldSet('remote_as_id', 'enable', 'bfd', 'ebgp_multihop', name=_('Session')),
+        FieldSet('remote_as_id', 'enable', 'bfd_id', 'ebgp_multihop', name=_('Session')),
         FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
@@ -460,10 +467,10 @@ class BGPPeergroupBulkEditForm(NetBoxModelBulkEditForm):
         required=False,
         widget=BulkEditNullBooleanSelect(),
     )
-    bfd = forms.NullBooleanField(
-        label=_('BFD'),
+    bfd = DynamicModelChoiceField(
+        label=_('BFD Profile'),
+        queryset=BFDProfile.objects.all(),
         required=False,
-        widget=BulkEditNullBooleanSelect(),
     )
     # Bulk edit never renders an existing value (there is no single instance), but the
     # widget is left non-rendering anyway so no future change can start echoing keys.
@@ -495,7 +502,7 @@ class BGPPeergroupBulkEditForm(NetBoxModelBulkEditForm):
         FieldSet('bgprouter', 'remote_as', 'enable', name=_('Peer Group')),
         FieldSet('bfd', 'password', 'ebgp_multihop', 'ebgp_multihop_ttl', 'description', name=_('Session')),
     )
-    nullable_fields = ('password', 'ebgp_multihop_ttl', 'description', 'comments')
+    nullable_fields = ('bfd', 'password', 'ebgp_multihop_ttl', 'description', 'comments')
 
 
 class BGPPeergroupImportForm(BGPRouterCSVMixin, NetBoxModelImportForm):
@@ -504,6 +511,13 @@ class BGPPeergroupImportForm(BGPRouterCSVMixin, NetBoxModelImportForm):
         queryset=ASN.objects.all(),
         to_field_name='asn',
         help_text=_('Remote autonomous system number'),
+    )
+    bfd = CSVModelChoiceField(
+        label=_('BFD Profile'),
+        queryset=BFDProfile.objects.all(),
+        to_field_name='name',
+        required=False,
+        help_text=_('Name of the BFD profile applied to this session (blank for none)'),
     )
 
     fieldsets = (
@@ -574,6 +588,12 @@ class BGPPeerForm(BGPPasswordMixin, NetBoxModelForm):
     remote_as = DynamicModelChoiceField(
         label=_('Remote AS'),
         queryset=ASN.objects.all(),
+    )
+    bfd = DynamicModelChoiceField(
+        label=_('BFD Profile'),
+        queryset=BFDProfile.objects.all(),
+        required=False,
+        help_text=_('Enable BFD for this session using the parameters of the referenced profile.'),
     )
     comments = CommentField()
 
@@ -671,10 +691,10 @@ class BGPPeerFilterForm(PrimaryModelFilterSetForm):
         required=False,
         widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES),
     )
-    bfd = forms.NullBooleanField(
-        label=_('BFD'),
+    bfd_id = DynamicModelMultipleChoiceField(
+        label=_('BFD Profile'),
+        queryset=BFDProfile.objects.all(),
         required=False,
-        widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES),
     )
     ebgp_multihop = forms.NullBooleanField(
         label=_('eBGP Multihop'),
@@ -687,7 +707,7 @@ class BGPPeerFilterForm(PrimaryModelFilterSetForm):
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('device_id', 'vrf_id', 'bgprouter_id', name=_('BGP Router')),
         FieldSet('peergroup_id', 'remote_address_id', 'interface_id', name=_('Peer')),
-        FieldSet('remote_as_id', 'enable', 'bfd', 'ebgp_multihop', name=_('Session')),
+        FieldSet('remote_as_id', 'enable', 'bfd_id', 'ebgp_multihop', name=_('Session')),
         FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
 
@@ -718,10 +738,10 @@ class BGPPeerBulkEditForm(NetBoxModelBulkEditForm):
         required=False,
         widget=BulkEditNullBooleanSelect(),
     )
-    bfd = forms.NullBooleanField(
-        label=_('BFD'),
+    bfd = DynamicModelChoiceField(
+        label=_('BFD Profile'),
+        queryset=BFDProfile.objects.all(),
         required=False,
-        widget=BulkEditNullBooleanSelect(),
     )
     # Bulk edit never renders an existing value (there is no single instance), but the
     # widget is left non-rendering anyway so no future change can start echoing keys.
@@ -755,7 +775,7 @@ class BGPPeerBulkEditForm(NetBoxModelBulkEditForm):
         FieldSet('bgprouter', 'peergroup', 'remote_as', 'enable', name=_('Peer')),
         FieldSet('bfd', 'password', 'ebgp_multihop', 'ebgp_multihop_ttl', 'description', name=_('Session')),
     )
-    nullable_fields = ('peergroup', 'password', 'ebgp_multihop_ttl', 'description', 'comments')
+    nullable_fields = ('peergroup', 'bfd', 'password', 'ebgp_multihop_ttl', 'description', 'comments')
 
 
 class BGPPeerImportForm(BGPRouterCSVMixin, NetBoxModelImportForm):
@@ -785,6 +805,13 @@ class BGPPeerImportForm(BGPRouterCSVMixin, NetBoxModelImportForm):
         queryset=ASN.objects.all(),
         to_field_name='asn',
         help_text=_('Remote autonomous system number'),
+    )
+    bfd = CSVModelChoiceField(
+        label=_('BFD Profile'),
+        queryset=BFDProfile.objects.all(),
+        to_field_name='name',
+        required=False,
+        help_text=_('Name of the BFD profile applied to this session (blank for none)'),
     )
 
     fieldsets = (

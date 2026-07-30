@@ -13,6 +13,7 @@ from netbox.api.viewsets import NetBoxModelViewSet
 from utilities.query import count_related
 
 from netbox_routing_protocols.filtersets import (
+    BFDProfileFilterSet,
     BGPAddressFamilyFilterSet,
     BGPAddressFamilyRedistributeFilterSet,
     BGPPeerAddressFamilyFilterSet,
@@ -27,6 +28,7 @@ from netbox_routing_protocols.filtersets import (
     StaticRouteFilterSet,
 )
 from netbox_routing_protocols.models import (
+    BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
     BGPPeer,
@@ -130,6 +132,17 @@ class RouteMapRuleViewSet(NetBoxModelViewSet):
 
 
 #
+# BFD
+#
+
+
+class BFDProfileViewSet(NetBoxModelViewSet):
+    queryset = BFDProfile.objects.select_related('device', 'owner').prefetch_related('tags')
+    serializer_class = serializers.BFDProfileSerializer
+    filterset_class = BFDProfileFilterSet
+
+
+#
 # BGP
 #
 
@@ -153,6 +166,7 @@ class BGPPeergroupViewSet(NetBoxModelViewSet):
         'bgprouter__device',
         'bgprouter__vrf',
         'remote_as',
+        'bfd',
         'owner',
     ).prefetch_related('tags')
     serializer_class = serializers.BGPPeergroupSerializer
@@ -168,6 +182,7 @@ class BGPPeerViewSet(NetBoxModelViewSet):
         'remote_address',
         'interface',
         'peergroup',
+        'bfd',
         'owner',
     ).prefetch_related('tags')
     serializer_class = serializers.BGPPeerSerializer

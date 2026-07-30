@@ -32,6 +32,7 @@ from netbox_routing_protocols.choices import (
     BGPRedistributeProtocolChoices,
 )
 from netbox_routing_protocols.models import (
+    BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
     BGPPeer,
@@ -47,6 +48,7 @@ from netbox_routing_protocols.models import (
 )
 
 __all__ = (
+    'BFDProfileSerializer',
     'BGPAddressFamilyRedistributeSerializer',
     'BGPAddressFamilySerializer',
     'BGPPeerAddressFamilySerializer',
@@ -213,6 +215,36 @@ class RouteMapRuleSerializer(PrimaryModelSerializer):
 
 
 #
+# BFD
+#
+
+
+class BFDProfileSerializer(PrimaryModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name=_detail_view_name('bfdprofile'))
+    device = DeviceSerializer(nested=True, required=False, allow_null=True, default=None)
+
+    class Meta:
+        model = BFDProfile
+        fields = (
+            'id',
+            'url',
+            'display',
+            'name',
+            'device',
+            'min_tx',
+            'min_rx',
+            'detect_multiplier',
+            'echo_mode',
+            'echo_tx',
+            'echo_rx',
+            'passive_mode',
+            'minimum_ttl',
+            *PRIMARY_MODEL_FIELDS,
+        )
+        brief_fields = ('id', 'url', 'display', 'name')
+
+
+#
 # BGP
 #
 
@@ -250,6 +282,7 @@ class BGPPeergroupSerializer(PrimaryModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name=_detail_view_name('bgppeergroup'))
     bgprouter = BGPRouterSerializer(nested=True)
     remote_as = ASNSerializer(nested=True)
+    bfd = BFDProfileSerializer(nested=True, required=False, allow_null=True, default=None)
     # BGP MD5 authentication key. Readable: config generation needs to render it into
     # device configuration, which is the point of modelling it here. Stored and returned
     # in plaintext — restrict object permissions accordingly.
@@ -285,6 +318,7 @@ class BGPPeerSerializer(PrimaryModelSerializer):
     name = serializers.CharField(read_only=True)
     bgprouter = BGPRouterSerializer(nested=True)
     remote_as = ASNSerializer(nested=True)
+    bfd = BFDProfileSerializer(nested=True, required=False, allow_null=True, default=None)
     # BGP MD5 authentication key. Readable: config generation needs to render it into
     # device configuration, which is the point of modelling it here. Stored and returned
     # in plaintext — restrict object permissions accordingly.

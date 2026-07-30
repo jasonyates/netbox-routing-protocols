@@ -26,6 +26,7 @@ from netbox_routing_protocols.choices import (
     BGPRedistributeProtocolChoices,
 )
 from netbox_routing_protocols.models import (
+    BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
     BGPPeer,
@@ -54,6 +55,7 @@ BRIEF_FIELDS_FAMILY = ['display', 'family', 'id', 'url']
 # Model names of every endpoint this plugin exposes.
 PLUGIN_MODEL_NAMES = (
     'staticroute',
+    'bfdprofile',
     'prefixlist',
     'prefixlistrule',
     'routemap',
@@ -373,6 +375,42 @@ class RouteMapRuleTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
 #
 
 
+class BFDProfileTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
+    model = BFDProfile
+    user_permissions = related_view_permissions('bfdprofile')
+    graphql_base_name = 'bfd_profile'
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+
+        for name in ('BFD-1', 'BFD-2', 'BFD-3'):
+            BFDProfile.objects.create(name=name, device=cls.devices[0], min_tx=300, min_rx=300)
+
+        cls.create_data = [
+            {
+                'name': 'BFD-NEW-1',
+                'device': cls.devices[1].pk,
+                'min_tx': 250,
+                'min_rx': 250,
+                'detect_multiplier': 3,
+            },
+            {
+                'name': 'BFD-NEW-2',
+                'device': cls.devices[1].pk,
+                'echo_mode': True,
+                'echo_tx': 500,
+                'echo_rx': 500,
+            },
+            # No device: a shared, fleet-wide profile.
+            {
+                'name': 'BFD-NEW-3',
+                'passive_mode': True,
+                'minimum_ttl': 254,
+            },
+        ]
+
+
 class BGPRouterTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
     model = BGPRouter
     user_permissions = related_view_permissions('bgprouter')
@@ -435,7 +473,7 @@ class BGPPeergroupTestCase(RoutingProtocolsAPITestCases.APIViewTestCase):
                 'bgprouter': cls.other_router.pk,
                 'name': 'PG-NEW-2',
                 'remote_as': cls.asns[2].pk,
-                'bfd': False,
+                'bfd': BFDProfile.objects.create(name='default').pk,
             },
             {
                 'bgprouter': cls.other_router.pk,
@@ -699,12 +737,14 @@ class RoutingProtocolsAPIFixture(BaseTestData, APITestCase):
             action=ActionChoices.ACTION_PERMIT,
             prefix_list=cls.prefix_list,
         )
+        cls.bfd_profile = BFDProfile.objects.create(name='default', min_tx=300, min_rx=300)
         cls.bgp_router = BGPRouter.objects.create(device=cls.devices[0], vrf=cls.vrfs[0])
         cls.peergroup = BGPPeergroup.objects.create(
             bgprouter=cls.bgp_router,
             name='PG-CORE',
             remote_as=cls.asns[0],
             password='peergroup-secret',
+            bfd=cls.bfd_profile,
         )
         cls.peer = BGPPeer.objects.create(
             bgprouter=cls.bgp_router,
@@ -731,9 +771,10 @@ class RoutingProtocolsAPIFixture(BaseTestData, APITestCase):
         )
 
     def endpoints(self):
-        """Yield (label, instance, brief_fields) for all twelve endpoints."""
+        """Yield (label, instance, brief_fields) for every endpoint."""
         return (
             ('staticroute', self.static_route, BRIEF_FIELDS),
+            ('bfdprofile', self.bfd_profile, BRIEF_FIELDS),
             ('prefixlist', self.prefix_list, BRIEF_FIELDS),
             ('prefixlistrule', self.prefix_list_rule, BRIEF_FIELDS),
             ('routemap', self.route_map, BRIEF_FIELDS),

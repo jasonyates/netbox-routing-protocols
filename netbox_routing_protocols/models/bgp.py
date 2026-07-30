@@ -146,10 +146,17 @@ class BGPPeerAttributes(PrimaryModel):
         verbose_name='Remote AS',
     )
 
-    bfd = models.BooleanField(
-        default=True,
-        verbose_name='BFD',
-        help_text='Use Bidirectional Forwarding Detection for this session.',
+    # Replaced a boolean in 1.1: a bare "BFD on" cannot render a working
+    # configuration — every platform needs intervals and a multiplier, which
+    # live on the profile. Null means BFD is not enabled for the session.
+    bfd = models.ForeignKey(
+        to='netbox_routing_protocols.BFDProfile',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='%(class)ss',
+        verbose_name='BFD Profile',
+        help_text='Enable BFD for this session using the parameters of the referenced profile.',
     )
 
     # Held and returned in plaintext, like any other field: the key has to reach device
@@ -195,6 +202,15 @@ class BGPPeerAttributes(PrimaryModel):
                     'ebgp_multihop_ttl': 'Cannot set a multihop TTL unless eBGP Multihop is enabled.',
                 }
             )
+
+        # A shared BFD profile (no device) is usable from any router.
+        if self.bfd_id and self.bgprouter_id:
+            if self.bfd.device_id and self.bfd.device_id != self.bgprouter.device_id:
+                raise ValidationError(
+                    {
+                        'bfd': (f'BFD profile {self.bfd.name} belongs to a different device.'),
+                    }
+                )
 
 
 class BGPPeergroup(BGPPeerAttributes):

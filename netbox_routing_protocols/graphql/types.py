@@ -24,6 +24,7 @@ from users.graphql.mixins import OwnerMixin
 from netbox_routing_protocols import models
 
 from .filters import (
+    BFDProfileFilter,
     BGPAddressFamilyFilter,
     BGPAddressFamilyRedistributeFilter,
     BGPPeerAddressFamilyFilter,
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
     from ipam.graphql.types import ASNType, IPAddressType, PrefixType, VRFType
 
 __all__ = (
+    'BFDProfileType',
     'BGPAddressFamilyRedistributeType',
     'BGPAddressFamilyType',
     'BGPPeerAddressFamilyType',
@@ -143,6 +145,24 @@ class RouteMapRuleType(OwnerMixin, NetBoxObjectType):
 
 
 #
+# BFD
+#
+
+
+@strawberry_django.type(
+    models.BFDProfile,
+    fields='__all__',
+    filters=BFDProfileFilter,
+    pagination=True,
+)
+class BFDProfileType(OwnerMixin, NetBoxObjectType):
+    device: Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')] | None
+
+    bgppeers: list[Annotated['BGPPeerType', strawberry.lazy('netbox_routing_protocols.graphql.types')]]
+    bgppeergroups: list[Annotated['BGPPeergroupType', strawberry.lazy('netbox_routing_protocols.graphql.types')]]
+
+
+#
 # BGP
 #
 
@@ -178,6 +198,7 @@ class BGPPeerAttributesMixin:
 
     bgprouter: Annotated['BGPRouterType', strawberry.lazy('netbox_routing_protocols.graphql.types')]
     remote_as: Annotated['ASNType', strawberry.lazy('ipam.graphql.types')]
+    bfd: Annotated['BFDProfileType', strawberry.lazy('netbox_routing_protocols.graphql.types')] | None
 
     @strawberry_django.field(select_related=['bgprouter__device'])
     def device(self) -> Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')] | None:

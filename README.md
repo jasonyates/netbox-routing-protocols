@@ -18,6 +18,7 @@ so that config generation, compliance checks and automation can read it back out
 - Prefix list rules matching a prefix, any prefix, or the default route, with `ge`/`le` length bounds
 - Route maps with ordered rules matching against prefix lists, scoped to a device or shared fleet-wide
 - Optional automatic terminating `deny 9999` rule on new prefix lists and route maps
+- BFD profiles carrying intervals, detect multiplier, echo and passive mode, referenced from BGP sessions
 
 **BGP**
 - BGP routers per device and VRF, with ASN, router ID, AS-path handling and route reflection

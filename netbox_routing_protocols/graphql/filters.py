@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from netbox.graphql.filter_lookups import IntegerLookup
 
 __all__ = (
+    'BFDProfileFilter',
     'BGPAddressFamilyEnum',
     'BGPAddressFamilyFilter',
     'BGPAddressFamilyRedistributeFilter',
@@ -156,6 +157,27 @@ class RouteMapRuleFilter(PrimaryModelFilter):
 #
 
 
+@strawberry_django.filter_type(models.BFDProfile, lookups=True)
+class BFDProfileFilter(PrimaryModelFilter):
+    name: StrFilterLookup | None = strawberry_django.filter_field()
+    device: Annotated['DeviceFilter', strawberry.lazy('dcim.graphql.filters')] | None = strawberry_django.filter_field()
+    device_id: ID | None = strawberry_django.filter_field()
+    min_tx: Annotated['IntegerLookup', strawberry.lazy('netbox.graphql.filter_lookups')] | None = (
+        strawberry_django.filter_field()
+    )
+    min_rx: Annotated['IntegerLookup', strawberry.lazy('netbox.graphql.filter_lookups')] | None = (
+        strawberry_django.filter_field()
+    )
+    detect_multiplier: Annotated['IntegerLookup', strawberry.lazy('netbox.graphql.filter_lookups')] | None = (
+        strawberry_django.filter_field()
+    )
+    echo_mode: FilterLookup[bool] | None = strawberry_django.filter_field()
+    passive_mode: FilterLookup[bool] | None = strawberry_django.filter_field()
+    minimum_ttl: Annotated['IntegerLookup', strawberry.lazy('netbox.graphql.filter_lookups')] | None = (
+        strawberry_django.filter_field()
+    )
+
+
 @strawberry_django.filter_type(models.BGPRouter, lookups=True)
 class BGPRouterFilter(PrimaryModelFilter):
     device: Annotated['DeviceFilter', strawberry.lazy('dcim.graphql.filters')] | None = strawberry_django.filter_field()
@@ -189,7 +211,10 @@ class BGPPeerAttributesFilterMixin:
     enable: FilterLookup[bool] | None = strawberry_django.filter_field()
     remote_as: Annotated['ASNFilter', strawberry.lazy('ipam.graphql.filters')] | None = strawberry_django.filter_field()
     remote_as_id: ID | None = strawberry_django.filter_field()
-    bfd: FilterLookup[bool] | None = strawberry_django.filter_field()
+    bfd: Annotated['BFDProfileFilter', strawberry.lazy('netbox_routing_protocols.graphql.filters')] | None = (
+        strawberry_django.filter_field()
+    )
+    bfd_id: ID | None = strawberry_django.filter_field()
     ebgp_multihop: FilterLookup[bool] | None = strawberry_django.filter_field()
     ebgp_multihop_ttl: Annotated['IntegerLookup', strawberry.lazy('netbox.graphql.filter_lookups')] | None = (
         strawberry_django.filter_field()
