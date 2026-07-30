@@ -1,3 +1,4 @@
+from .bfd import BFDProfileTable
 from .bgp import (
     BGPAddressFamilyRedistributeTable,
     BGPAddressFamilyTable,
@@ -11,6 +12,7 @@ from .policy import PrefixListRuleTable, PrefixListTable, RouteMapRuleTable, Rou
 from .static import StaticRouteTable
 
 __all__ = (
+    'BFDProfileTable',
     'BGPAddressFamilyRedistributeTable',
     'BGPAddressFamilyTable',
     'BGPPeerAddressFamilyTable',

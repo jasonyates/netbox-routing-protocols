@@ -36,6 +36,7 @@ from netbox_routing_protocols.choices import (
     BGPRedistributeProtocolChoices,
 )
 from netbox_routing_protocols.models import (
+    BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
     BGPPeer,
@@ -337,6 +338,91 @@ class StaticRouteTestCase(BaseTestData, TestCase):
         route.full_clean()
         route.save()
         self.assertEqual(StaticRoute.objects.filter(prefix=self.prefixes4[0]).count(), 2)
+
+
+class BFDProfileTestCase(BaseTestData, TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.build_topology()
+
+    def test_str(self):
+        profile = BFDProfile.objects.create(name='BFD-FAST', min_tx=100, min_rx=100)
+        self.assertEqual(str(profile), 'BFD-FAST')
+
+    def test_duplicate_name_on_device_is_rejected(self):
+        BFDProfile.objects.create(name='BFD-1', device=self.devices[0])
+        duplicate = BFDProfile(name='BFD-1', device=self.devices[0])
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            duplicate.save()
+
+    def test_duplicate_shared_name_is_rejected(self):
+        BFDProfile.objects.create(name='BFD-SHARED')
+        duplicate = BFDProfile(name='BFD-SHARED')
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            duplicate.save()
+
+    def test_shared_and_device_scoped_may_share_a_name(self):
+        BFDProfile.objects.create(name='BFD-1')
+        profile = BFDProfile(name='BFD-1', device=self.devices[0])
+        profile.full_clean()
+        profile.save()
+        self.assertEqual(BFDProfile.objects.filter(name='BFD-1').count(), 2)
+
+    def test_clean_rejects_echo_intervals_without_echo_mode(self):
+        for field in ('echo_tx', 'echo_rx'):
+            with self.subTest(field=field):
+                profile = BFDProfile(name='BFD-ECHO', **{field: 500})
+                with self.assertRaises(ValidationError) as ctx:
+                    profile.full_clean()
+                self.assertIn(field, ctx.exception.message_dict)
+
+    def test_clean_accepts_echo_intervals_with_echo_mode(self):
+        profile = BFDProfile(name='BFD-ECHO', echo_mode=True, echo_tx=500, echo_rx=500)
+        profile.full_clean()
+
+    def test_peer_clean_rejects_profile_from_another_device(self):
+        router = BGPRouter.objects.create(device=self.devices[0], vrf=self.vrfs[0])
+        profile = BFDProfile.objects.create(name='BFD-OTHER', device=self.devices[1])
+        peer = BGPPeer(
+            bgprouter=router,
+            remote_address=self.addresses4[0],
+            remote_as=self.asns[0],
+            bfd=profile,
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            peer.full_clean()
+        self.assertIn('bfd', ctx.exception.message_dict)
+
+    def test_peer_clean_accepts_shared_and_same_device_profiles(self):
+        router = BGPRouter.objects.create(device=self.devices[0], vrf=self.vrfs[0])
+        for profile in (
+            BFDProfile.objects.create(name='BFD-SHARED'),
+            BFDProfile.objects.create(name='BFD-LOCAL', device=self.devices[0]),
+        ):
+            with self.subTest(profile=profile.name):
+                peer = BGPPeer(
+                    bgprouter=router,
+                    remote_address=self.addresses4[0],
+                    remote_as=self.asns[0],
+                    bfd=profile,
+                )
+                peer.full_clean()
+
+    def test_profile_in_use_is_protected(self):
+        router = BGPRouter.objects.create(device=self.devices[0], vrf=self.vrfs[0])
+        profile = BFDProfile.objects.create(name='BFD-1')
+        BGPPeer.objects.create(
+            bgprouter=router,
+            remote_address=self.addresses4[0],
+            remote_as=self.asns[0],
+            bfd=profile,
+        )
+        with self.assertRaises(models.ProtectedError), transaction.atomic():
+            profile.delete()
 
 
 class PrefixListTestCase(BaseTestData, TestCase):
@@ -1423,7 +1509,7 @@ class BGPPasswordChangeLogTestCase(BaseTestData, TestCase):
             with self.subTest(model=label):
                 instance.snapshot()
                 instance.description = f'{label} updated'
-                instance.bfd = not instance.bfd
+                instance.bfd = BFDProfile.objects.get_or_create(name='default')[0]
                 change = instance.to_objectchange(ObjectChangeActionChoices.ACTION_UPDATE)
 
                 self.assertEqual(change.prechange_data['description'], '')

@@ -24,6 +24,9 @@ router.register('prefix-list-rules', views.PrefixListRuleViewSet)
 router.register('route-maps', views.RouteMapViewSet)
 router.register('route-map-rules', views.RouteMapRuleViewSet)
 
+# BFD
+router.register('bfd-profiles', views.BFDProfileViewSet)
+
 # BGP
 router.register('bgp-routers', views.BGPRouterViewSet)
 router.register('bgp-peers', views.BGPPeerViewSet)

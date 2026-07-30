@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `BFDProfile` model carrying BFD session parameters — TX/RX intervals, detect multiplier,
+  echo mode and intervals, passive mode and minimum TTL ([#20]). Profiles follow the shared
+  scoping pattern: scoped to a device, or fleet-wide when the device is blank. Full UI,
+  REST API (`bfd-profiles`), GraphQL, global search and CSV import coverage.
 - Prefix lists and route maps may now be shared fleet-wide by leaving their device blank
   ([#13]). A shared policy object may be referenced from any device's BGP configuration or
   route map rules; names are unique per device and among shared objects. A new
@@ -15,6 +19,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shared ones), and a `shared` filter selects shared objects alone.
 
 ### Changed
+- The `bfd` boolean on BGP peers and peer groups is now a nullable foreign key to
+  `BFDProfile` ([#20]). A bare "BFD on" cannot render a working configuration — every
+  platform needs intervals and a multiplier. The migration preserves intent: peers with
+  `bfd=True` are pointed at a shared profile named `default` (all intervals null, meaning
+  platform defaults); `bfd=False` becomes null. The REST API field now takes a profile ID,
+  and CSV import takes a profile name.
 - `BGPRouter.aspath_ignore` renamed to `multipath_relax` ([#5]). The field was inherited
   from an NVUE estate where `aspath-ignore` spells multipath-relax, and the old name and
   help text described a different feature (`bgp bestpath as-path ignore`). Config
@@ -24,6 +34,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 [#5]: https://github.com/jasonyates/netbox-routing-protocols/issues/5
 [#13]: https://github.com/jasonyates/netbox-routing-protocols/issues/13
+[#20]: https://github.com/jasonyates/netbox-routing-protocols/issues/20
 
 ## [1.0.0] — 2026-07-29
 

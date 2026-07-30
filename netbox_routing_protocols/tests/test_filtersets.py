@@ -24,6 +24,7 @@ from netbox_routing_protocols.choices import (
     BGPRedistributeProtocolChoices,
 )
 from netbox_routing_protocols.filtersets import (
+    BFDProfileFilterSet,
     BGPAddressFamilyFilterSet,
     BGPAddressFamilyRedistributeFilterSet,
     BGPPeerAddressFamilyFilterSet,
@@ -38,6 +39,7 @@ from netbox_routing_protocols.filtersets import (
     StaticRouteFilterSet,
 )
 from netbox_routing_protocols.models import (
+    BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
     BGPPeer,
@@ -214,9 +216,17 @@ class FilterSetTestData(BaseTestData):
             BGPRouter.objects.create(device=cls.devices[1], vrf=cls.vrfs[0], asn=cls.asns[2], enable=False),
         ]
 
+        cls.bfd_profiles = [
+            BFDProfile.objects.create(name='BFD-FAST', min_tx=100, min_rx=100),
+            BFDProfile.objects.create(name='BFD-SLOW', device=cls.devices[0], min_tx=1000, min_rx=1000),
+            BFDProfile.objects.create(name='BFD-ECHO', echo_mode=True),
+        ]
+
         cls.peergroups = [
-            BGPPeergroup.objects.create(bgprouter=cls.bgp_routers[0], name='PG-CORE', remote_as=cls.asns[0]),
-            BGPPeergroup.objects.create(bgprouter=cls.bgp_routers[0], name='PG-EDGE', remote_as=cls.asns[1], bfd=False),
+            BGPPeergroup.objects.create(
+                bgprouter=cls.bgp_routers[0], name='PG-CORE', remote_as=cls.asns[0], bfd=cls.bfd_profiles[0]
+            ),
+            BGPPeergroup.objects.create(bgprouter=cls.bgp_routers[0], name='PG-EDGE', remote_as=cls.asns[1]),
             BGPPeergroup.objects.create(bgprouter=cls.bgp_routers[2], name='PG-TRANSIT', remote_as=cls.asns[2]),
         ]
 
@@ -366,6 +376,38 @@ class StaticRouteFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, Chang
 #
 # Routing policy
 #
+
+
+class BFDProfileFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):
+    queryset = BFDProfile.objects.all()
+    filterset = BFDProfileFilterSet
+
+    def test_name(self):
+        params = {'name': ['BFD-FAST']}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_device(self):
+        params = {'device_id': [self.devices[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+
+    def test_available_on_device(self):
+        # The device's own profile plus the two shared ones.
+        params = {'available_on_device': [self.devices[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
+
+    def test_shared(self):
+        self.assertEqual(self.filterset({'shared': True}, self.queryset).qs.count(), 2)
+        self.assertEqual(self.filterset({'shared': False}, self.queryset).qs.count(), 1)
+
+    def test_intervals(self):
+        self.assertEqual(self.filterset({'min_tx': [100]}, self.queryset).qs.count(), 1)
+        self.assertEqual(self.filterset({'detect_multiplier': [3]}, self.queryset).qs.count(), 0)
+
+    def test_echo_mode(self):
+        self.assertEqual(self.filterset({'echo_mode': True}, self.queryset).qs.count(), 1)
+
+    def test_search_matches_name(self):
+        self.assertEqual(self.filterset({'q': 'BFD-SLOW'}, self.queryset).qs.count(), 1)
 
 
 class PrefixListFilterSetTestCase(FilterSetTestData, FreeTextSearchTests, ChangeLoggedFilterSetTests, TestCase):
@@ -546,7 +588,10 @@ class BGPPeergroupFilterSetTestCase(
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
 
     def test_bfd(self):
-        self.assertEqual(self.filterset({'bfd': False}, self.queryset).qs.count(), 1)
+        params = {'bfd_id': [self.bfd_profiles[0].pk]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
+        params = {'bfd': [self.bfd_profiles[0].name]}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
 
     def test_search_matches_name(self):
         self.assertEqual(self.filterset({'q': 'PG-TRANSIT'}, self.queryset).qs.count(), 1)

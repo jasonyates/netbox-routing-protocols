@@ -16,6 +16,7 @@ Weights follow the NetBox convention: lower is more relevant.
 from netbox.search import SearchIndex
 
 from netbox_routing_protocols.models import (
+    BFDProfile,
     BGPAddressFamily,
     BGPAddressFamilyRedistribute,
     BGPPeer,
@@ -31,6 +32,7 @@ from netbox_routing_protocols.models import (
 )
 
 __all__ = (
+    'BFDProfileIndex',
     'BGPAddressFamilyIndex',
     'BGPAddressFamilyRedistributeIndex',
     'BGPPeerAddressFamilyIndex',
@@ -45,6 +47,16 @@ __all__ = (
     'StaticRouteIndex',
     'indexes',
 )
+
+
+class BFDProfileIndex(SearchIndex):
+    model = BFDProfile
+    fields = (
+        ('name', 100),
+        ('description', 500),
+        ('comments', 5000),
+    )
+    display_attrs = ('device', 'description')
 
 
 class StaticRouteIndex(SearchIndex):
@@ -188,6 +200,7 @@ class BGPPeergroupAddressFamilyIndex(SearchIndex):
 
 indexes = [
     StaticRouteIndex,
+    BFDProfileIndex,
     PrefixListIndex,
     PrefixListRuleIndex,
     RouteMapIndex,

@@ -46,6 +46,7 @@ menu = PluginMenu(
             (
                 _menu_item('prefixlist', _('Prefix Lists')),
                 _menu_item('routemap', _('Route Maps')),
+                _menu_item('bfdprofile', _('BFD Profiles')),
             ),
         ),
         (

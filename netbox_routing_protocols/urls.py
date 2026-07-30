@@ -28,6 +28,7 @@ APP_LABEL = 'netbox_routing_protocols'
 # API counterpart differ only by the /api/plugins/routing-protocols prefix.
 MODEL_URL_PREFIXES = {
     'static-routes': 'staticroute',
+    'bfd-profiles': 'bfdprofile',
     'prefix-lists': 'prefixlist',
     'prefix-list-rules': 'prefixlistrule',
     'route-maps': 'routemap',

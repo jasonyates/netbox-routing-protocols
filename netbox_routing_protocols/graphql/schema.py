@@ -13,6 +13,7 @@ import strawberry
 import strawberry_django
 
 from .types import (
+    BFDProfileType,
     BGPAddressFamilyRedistributeType,
     BGPAddressFamilyType,
     BGPPeerAddressFamilyType,
@@ -46,6 +47,9 @@ class Query:
 
     route_map_rule: RouteMapRuleType = strawberry_django.field()
     route_map_rule_list: list[RouteMapRuleType] = strawberry_django.field()
+
+    bfd_profile: BFDProfileType = strawberry_django.field()
+    bfd_profile_list: list[BFDProfileType] = strawberry_django.field()
 
     bgp_router: BGPRouterType = strawberry_django.field()
     bgp_router_list: list[BGPRouterType] = strawberry_django.field()
