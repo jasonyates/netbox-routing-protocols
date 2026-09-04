@@ -12,7 +12,7 @@ class RoutingProtocolsConfig(PluginConfig):
     author_email = 'me@jasonyates.co.uk'
     base_url = 'routing-protocols'
     min_version = '4.6.0'
-    max_version = '4.6.99'
+    max_version = '4.7.99'
 
     default_settings = {
         # Create a terminating "deny 9999 / match any" rule whenever a new
