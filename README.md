@@ -32,9 +32,10 @@ journaling, export templates, global search, the REST API and the GraphQL API.
 
 ## Compatibility
 
-| Plugin | NetBox | Python |
-|--------|--------|--------|
-| 1.0.x  | 4.6.x  | 3.12+  |
+| Plugin | NetBox       | Python |
+|--------|--------------|--------|
+| 1.1.x  | 4.6.x, 4.7.x | 3.12+  |
+| 1.0.x  | 4.6.x        | 3.12+  |
 
 ## Installation
 

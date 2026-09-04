@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-09-04
+
+### Added
+- NetBox 4.7 support. The plugin now accepts NetBox 4.6.x and 4.7.x
+  (`max_version = '4.7.99'`), and CI tests against both.
+
+### Changed
+- Query-count baselines are recorded against current NetBox (4.6.10 and 4.7.0 agree),
+  which runs one query fewer per API list view and three fewer per UI list view than
+  early 4.6 patch releases. The old counts are kept in `query_counts-4.6.0.json`, and CI
+  swaps them in for the v4.6.0 matrix leg.
+- The filterset test module falls back to NetBox 4.7's `ChangeLoggedFilterSetTestMixin`
+  name for the class 4.6 exports as `ChangeLoggedFilterSetTests`, so the same tests run
+  against either version.
+
 ## [1.0.0] — 2026-07-29
 
 First public release. The plugin has been rebuilt against NetBox 4.6 and a number of

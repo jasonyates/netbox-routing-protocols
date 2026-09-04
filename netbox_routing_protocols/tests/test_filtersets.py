@@ -15,7 +15,12 @@ fields imply.
 
 from django.test import TestCase
 
-from utilities.testing import ChangeLoggedFilterSetTests
+try:
+    from utilities.testing import ChangeLoggedFilterSetTests
+except ImportError:
+    # NetBox 4.7 renamed the class; keep the 4.6 name so the test classes below
+    # read the same against either version.
+    from utilities.testing import ChangeLoggedFilterSetTestMixin as ChangeLoggedFilterSetTests
 
 from netbox_routing_protocols.choices import (
     ActionChoices,

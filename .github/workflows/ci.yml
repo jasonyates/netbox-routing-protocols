@@ -33,8 +33,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Oldest and newest supported NetBox 4.6 patch releases.
-        netbox: ["v4.6.0", "v4.6.5"]
+        # Oldest supported release, newest 4.6 patch, and newest 4.7.
+        netbox: ["v4.6.0", "v4.6.10", "v4.7.0"]
         python: ["3.12"]
 
     services:
@@ -89,6 +89,15 @@ jobs:
         run: |
           cp configuration_testing.py configuration.py
           echo "PLUGINS = ['netbox_routing_protocols']" >> configuration.py
+
+      - name: Use the early-4.6 query-count baseline
+        # query_counts.json is recorded against current NetBox (4.6.10/4.7.0, which
+        # run fewer queries per list view). Early 4.6 patch releases still use the
+        # older counts, so the v4.6.0 leg swaps in the baseline recorded for them.
+        if: matrix.netbox == 'v4.6.0'
+        run: >
+          cp plugin/netbox_routing_protocols/tests/query_counts-4.6.0.json
+          plugin/netbox_routing_protocols/tests/query_counts.json
 
       - name: Run migrations
         working-directory: netbox/netbox
